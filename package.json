@@ -1,0 +1,54 @@
+{
+  "name": "tokenlens",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Local AI coding token usage dashboard",
+  "main": "./dist/server/index.js",
+  "types": "./dist/server/index.d.ts",
+  "bin": {
+    "tokenlens": "bin/tokenlens.js"
+  },
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "tsx watch src/cli/index.ts --no-open",
+    "dev:client": "vite",
+    "build": "vite build && tsc -p tsconfig.json",
+    "start": "node dist/cli/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.frontend.json --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "open": "^10.1.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "recharts": "^2.15.3",
+    "zod": "^3.24.3"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^11.10.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@tailwindcss/vite": "^4.1.4",
+    "@types/express": "^5.0.2",
+    "@types/node": "^22.15.2",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-react": "^4.4.1",
+    "concurrently": "^9.1.2",
+    "tailwindcss": "^4.1.4",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.3",
+    "vitest": "^4.1.4"
+  }
+}
