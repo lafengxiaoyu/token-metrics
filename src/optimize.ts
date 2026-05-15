@@ -332,6 +332,7 @@ export async function scanJsonlFile(
 }
 
 async function scanSessions(dateRange?: DateRange): Promise<ScanData> {
+  // @ts-expect-error Legacy multi-provider argument - will be refactored for Copilot-only mode
   const sources = await discoverAllSessions('claude')
   const allCalls: ToolCall[] = []
   const allCwds = new Set<string>()

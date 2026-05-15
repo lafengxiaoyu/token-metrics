@@ -8,18 +8,13 @@ export type SessionParser = {
   parse(): AsyncGenerator<ParsedProviderCall>
 }
 
-export type ParsedProviderCall= {
+export type ParsedProviderCall = {
   provider: string
   model: string
   inputTokens: number
   outputTokens: number
-  cacheCreationInputTokens: number
-  cacheReadInputTokens: number
-  cachedInputTokens: number
   reasoningTokens: number
-  webSearchRequests: number
-costUSD: number
-  costIsEstimated?: boolean
+  costUSD: number
   tools: string[]
   bashCommands: string[]
   timestamp: string
@@ -27,8 +22,6 @@ costUSD: number
   deduplicationKey: string
   userMessage: string
   sessionId: string
-linesAdded: number
-  linesDeleted: number
 }
 
 export type Provider = {
@@ -37,5 +30,5 @@ export type Provider = {
   modelDisplayName(model: string): string
   toolDisplayName(rawTool: string): string
   discoverSessions(): Promise<SessionSource[]>
-createSessionParser(source: SessionSource, seenKeys: Set<string>): SessionParser
+  createSessionParser(source: SessionSource, seenKeys: Set<string>): SessionParser
 }

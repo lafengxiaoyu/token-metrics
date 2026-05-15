@@ -10,6 +10,17 @@ import type {
   AnalyticsResponse,
   DailyEntry,
   ProviderStatusDTO,
+//   AnalyticsDTO,
+//   HourlyActivityDTO,
+  QuotaUsage,
+  InsightsDTO,
+  SecurityAuditDTO,
+  ReasoningAnalysisDTO,
+  ConversationQualityDTO,
+  QuestionClassificationDTO,
+  ToolEfficiencyDTO,
+  FileActivityDTO,
+  SessionDurationDTO,
 } from '../../shared/types';
 
 export interface HourlyActivityEntry {
@@ -17,8 +28,6 @@ export interface HourlyActivityEntry {
   hour: number;
   inputTokens: number;
   outputTokens: number;
-  cacheReadTokens: number;
-  cacheWriteTokens: number;
   totalTokens: number;
   totalCost: number;
   calls: number;
@@ -30,7 +39,7 @@ export interface HourlyActivityResponse {
 
 const BASE = '/api';
 
-export type TimeRangeKey = 'today' | '7d' | '30d' | '60d' | 'all';
+export type TimeRangeKey = 'today' | '7d' | 'mtd' | '30d' | '60d' | 'all';
 
 function timeRangeToDates(range: TimeRangeKey): { from?: string; to?: string } {
   const now = new Date();
@@ -45,6 +54,11 @@ function timeRangeToDates(range: TimeRangeKey): { from?: string; to?: string } {
     case '7d': {
       const d = new Date(now); d.setDate(d.getDate() - 7);
       const from = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+      return { from, to };
+    }
+    case 'mtd': {
+      // Month to Date: first day of current month
+      const from = `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;
       return { from, to };
     }
     case '30d': {
@@ -92,25 +106,19 @@ export async function fetchDaily(provider = 'all', project?: string, range: Time
       date: d.date,
       inputTokens: d.inputTokens,
       outputTokens: d.outputTokens,
-      cacheCreationTokens: d.cacheWriteTokens,
-      cacheReadTokens: d.cacheReadTokens,
       totalTokens: d.totalTokens,
       totalCost: d.totalCost,
-      modelsUsed: d.models.map((m) => m.modelName),
-      modelBreakdowns: d.models.map((m) => ({
+      modelsUsed: (d.models || []).map((m) => m.modelName),
+      modelBreakdowns: (d.models || []).map((m) => ({
         modelName:m.modelName,
         inputTokens: m.inputTokens,
         outputTokens: m.outputTokens,
-        cacheCreationTokens: m.cacheWriteTokens,
-        cacheReadTokens: m.cacheReadTokens,
         cost: m.totalCost,
       })),
     })),
     totals: {
       inputTokens: 0,
       outputTokens: 0,
-      cacheCreationTokens: 0,
-      cacheReadTokens: 0,
       totalTokens: 0,
       totalCost: 0,
     },
@@ -136,8 +144,6 @@ export async function fetchProjects(provider = 'all', range: TimeRangeKey = '30d
       date: '',
       inputTokens: p.inputTokens,
       outputTokens: p.outputTokens,
-      cacheCreationTokens: 0,
-      cacheReadTokens: 0,
       totalTokens: p.totalTokens,
       totalCost: p.totalCost,
       modelsUsed: [],
@@ -165,4 +171,66 @@ export async function fetchHourlyActivity(provider ='all', project?: string, ran
 
 export async function fetchBlocks(_provider ='all', _project = ''): Promise<BlocksResponse> {
   return { blocks: [] };
+}
+
+export async function fetchQuota(): Promise<QuotaUsage | null> {
+  const res = await fetch(BASE + '/quota');
+  if (!res.ok) return null;
+  const json = await res.json() as ApiResult<QuotaUsage | null>;
+  return json.data;
+}
+
+export async function fetchInsights(provider = 'all', range: TimeRangeKey = '30d'): Promise<InsightsDTO> {
+  const { from, to } = timeRangeToDates(range);
+  const res = await fetch(BASE + '/insights' + qs(provider, { from, to }));
+  if (!res.ok) throw new Error('Failed to fetch insights: ' + res.status);
+  const json = await res.json() as ApiResult<InsightsDTO>;
+  return json.data;
+}
+
+export async function fetchSecurityAudit(): Promise<SecurityAuditDTO> {
+  const res = await fetch(BASE + '/insights/security');
+  if (!res.ok) throw new Error('Failed to fetch security audit: ' + res.status);
+  const json = await res.json() as ApiResult<SecurityAuditDTO>;
+  return json.data;
+}
+
+export async function fetchReasoningAnalysis(): Promise<ReasoningAnalysisDTO> {
+  const res = await fetch(BASE + '/insights/reasoning');
+  if (!res.ok) throw new Error('Failed to fetch reasoning analysis: ' + res.status);
+  const json = await res.json() as ApiResult<ReasoningAnalysisDTO>;
+  return json.data;
+}
+
+export async function fetchConversationQuality(): Promise<ConversationQualityDTO> {
+  const res = await fetch(BASE + '/insights/conversation');
+  if (!res.ok) throw new Error('Failed to fetch conversation quality: ' + res.status);
+  const json = await res.json() as ApiResult<ConversationQualityDTO>;
+  return json.data;
+}
+
+export async function fetchQuestionClassification(): Promise<QuestionClassificationDTO> {
+  const res = await fetch(BASE + '/insights/classification');
+  if (!res.ok) throw new Error('Failed to fetch question classification: ' + res.status);
+  const json = await res.json() as ApiResult<QuestionClassificationDTO>;
+  return json.data;
+}
+
+export async function fetchToolEfficiency(): Promise<ToolEfficiencyDTO> {
+  const res = await fetch(BASE + '/insights/efficiency');
+  if (!res.ok) throw new Error('Failed to fetch tool efficiency: ' + res.status);
+  const json = await res.json() as ApiResult<ToolEfficiencyDTO>;
+  return json.data;
+}
+
+export async function fetchFileActivity(): Promise<{ data: FileActivityDTO; meta: any }> {
+  const res = await fetch(BASE + '/insights/file-activity');
+  if (!res.ok) throw new Error('Failed to fetch file activity: ' + res.status);
+  return res.json();
+}
+
+export async function fetchSessionDurations(): Promise<{ data: SessionDurationDTO; meta: any }> {
+  const res = await fetch(BASE + '/insights/session-durations');
+  if (!res.ok) throw new Error('Failed to fetch session durations: ' + res.status);
+  return res.json();
 }

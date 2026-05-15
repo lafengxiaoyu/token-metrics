@@ -50,13 +50,10 @@ interface InternalModelAcc {
   provider: string;
   inputTokens: number;
   outputTokens: number;
-cacheReadTokens: number;
-  cacheWriteTokens: number;
   totalTokens: number;
   totalCost: number;
   calls: number;
   reasoningTokens: number;
-  estimatedCost: boolean;
 }
 
 interface InternalProviderAcc {
@@ -75,8 +72,6 @@ interface InternalDayAcc {
   date: string;
   inputTokens: number;
   outputTokens: number;
-  cacheReadTokens: number;
-  cacheWriteTokens: number;
   totalTokens: number;
   totalCost: number;
   calls: number;
@@ -94,8 +89,6 @@ function projectsToDailyDTO(projects: ProjectSummary[]): DailyUsageDTO[] {
 date,
         inputTokens: 0,
         outputTokens: 0,
-        cacheReadTokens: 0,
-        cacheWriteTokens: 0,
         totalTokens: 0,
         totalCost: 0,
         calls: 0,
@@ -120,8 +113,6 @@ const day = ensureDay(sessionDate);
 
           callDay.inputTokens += call.usage.inputTokens;
           callDay.outputTokens += call.usage.outputTokens;
-          callDay.cacheReadTokens += call.usage.cacheReadInputTokens;
-          callDay.cacheWriteTokens += call.usage.cacheCreationInputTokens;
 callDay.totalTokens += call.usage.inputTokens + call.usage.outputTokens;
           callDay.totalCost += call.costUSD;
           callDay.calls += 1;
@@ -134,20 +125,15 @@ callDay.totalTokens += call.usage.inputTokens + call.usage.outputTokens;
               provider: call.provider,
               inputTokens: 0,
               outputTokens: 0,
-              cacheReadTokens: 0,
-              cacheWriteTokens: 0,
               totalTokens:0,
               totalCost: 0,
               calls: 0,
             reasoningTokens: 0,
-            estimatedCost: false,
           };
           callDay.models.set(call.model, model);
           }
           model.inputTokens += call.usage.inputTokens;
           model.outputTokens += call.usage.outputTokens;
-          model.cacheReadTokens += call.usage.cacheReadInputTokens;
-          model.cacheWriteTokens += call.usage.cacheCreationInputTokens;
           model.totalTokens += call.usage.inputTokens + call.usage.outputTokens;
           model.totalCost += call.costUSD;
           model.calls += 1;
@@ -186,12 +172,9 @@ let prov = callDay.providers.get(call.provider);
       date: day.date,
       inputTokens: day.inputTokens,
       outputTokens: day.outputTokens,
-      cacheReadTokens: day.cacheReadTokens,
-      cacheWriteTokens: day.cacheWriteTokens,
       reasoningTokens: 0,
       totalTokens: day.totalTokens,
       totalCost: day.totalCost,
-      estimatedCost: false,
       calls: day.calls,
       sessions: day.sessions.size,
             models: [...day.models.values()].filter(m => m.modelName !== 'synthetic' && m.modelName !== '<synthetic>'),
@@ -202,7 +185,6 @@ let prov = callDay.providers.get(call.provider);
         outputTokens: p.outputTokens,
         totalTokens: p.totalTokens,
         totalCost:p.totalCost,
-        estimatedCost: false,
         calls: p.calls,
         sessions: p.sessions.size,
         projects: p.projects.size,
@@ -214,12 +196,9 @@ function projectsToSummary(projects: ProjectSummary[]) {
   const totals = {
     inputTokens: 0,
     outputTokens: 0,
-    cacheReadTokens: 0,
-    cacheWriteTokens: 0,
     reasoningTokens: 0,
     totalTokens: 0,
     totalCost: 0,
-    estimatedCost: false,
     calls: 0,
     sessions:new Set<string>(),
     activeDays: new Set<string>(),
@@ -238,8 +217,6 @@ function projectsToSummary(projects: ProjectSummary[]) {
 for (const call of turn.assistantCalls) {
           totals.inputTokens += call.usage.inputTokens;
           totals.outputTokens += call.usage.outputTokens;
-          totals.cacheReadTokens += call.usage.cacheReadInputTokens;
-          totals.cacheWriteTokens += call.usage.cacheCreationInputTokens;
           totals.totalTokens += call.usage.inputTokens + call.usage.outputTokens;
           totals.totalCost += call.costUSD;
           totals.calls += 1;
@@ -251,7 +228,6 @@ inputTokens: 0,
             outputTokens: 0,
             totalTokens: 0,
             totalCost: 0,
-            estimatedCost: false,
             calls: 0,
             sessions: 0,
             projects: 0,
@@ -269,18 +245,13 @@ const modelKey = `${call.model}-${call.provider}`;
             provider: call.provider,
             inputTokens: 0,
             outputTokens: 0,
-            cacheReadTokens: 0,
-cacheWriteTokens: 0,
             reasoningTokens: 0,
             totalTokens: 0,
             totalCost: 0,
-            estimatedCost: false,
             calls: 0,
           };
           existingModel.inputTokens += call.usage.inputTokens;
           existingModel.outputTokens+= call.usage.outputTokens;
-          existingModel.cacheReadTokens += call.usage.cacheReadInputTokens;
-          existingModel.cacheWriteTokens += call.usage.cacheCreationInputTokens;
           existingModel.totalTokens += call.usage.inputTokens + call.usage.outputTokens;
           existingModel.totalCost+= call.costUSD;
           existingModel.calls += 1;
@@ -296,7 +267,6 @@ inputTokens: 0,
         outputTokens: 0,
         totalTokens: 0,
         totalCost: 0,
-        estimatedCost: false,
         calls: 0,
         sessions: 0,
       };

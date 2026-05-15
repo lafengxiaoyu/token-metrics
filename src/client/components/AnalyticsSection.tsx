@@ -44,11 +44,12 @@ function formatNumber(n: number): string {
 
 // --- Time range filter helper ---
 
-type TimeRangeKey = 'today' | '7d' | '30d' | '60d' | 'all';
+type TimeRangeKey = 'today' | '7d' | 'mtd' | '30d' | '60d' | 'all';
 
 const TIME_RANGES = [
   { key: 'today', days: 1 },
   { key: '7d', days: 7 },
+  { key: 'mtd', days: -1 }, // Month to Date
   { key: '30d', days: 30 },
   { key: '60d', days: 60 },
   { key: 'all', days: 0 },
@@ -60,6 +61,11 @@ function filterByDate<T extends { date: string }>(data: T[], rangeKey: TimeRange
     const now = new Date();
     const today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
     return data.filter(d => d.date === today);
+  }
+  if (rangeKey === 'mtd') {
+    const now = new Date();
+    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    return data.filter(d => new Date(d.date) >= firstDayOfMonth);
   }
   const range = TIME_RANGES.find(t => t.key === rangeKey);
   const days = range ? range.days : 30;
@@ -78,9 +84,8 @@ interface AnalyticsSectionProps {
 // --- Component ---
 
 export function AnalyticsSection({ analytics, timeRange }: AnalyticsSectionProps) {
-  const { codeChangeTrend, toolCallTrend } = analytics;
+  const { toolCallTrend } = analytics;
 
-  const filteredChanges = useMemo(() => filterByDate(codeChangeTrend, timeRange), [codeChangeTrend, timeRange]);
   const filteredToolTrend = useMemo(() => filterByDate(toolCallTrend, timeRange), [toolCallTrend, timeRange]);
 
   // Get top 6 tools for the trend chart
@@ -95,56 +100,11 @@ export function AnalyticsSection({ analytics, timeRange }: AnalyticsSectionProps
     return [...toolCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name]) => name);
   }, [toolCallTrend]);
 
-  // Daily averages from filtered data
-  const dailyAvg = useMemo(() => {
-    if (filteredChanges.length === 0) return { files: 0, added: 0, deleted: 0, net: 0 };
-    const days = filteredChanges.length;
-    return {
-      files: Math.round(filteredChanges.reduce((s, d) => s + d.filesModified, 0) / days),
-      added:Math.round(filteredChanges.reduce((s, d) => s + d.linesAdded, 0) / days),
-      deleted: Math.round(filteredChanges.reduce((s, d) => s + d.linesDeleted, 0) / days),
-      net: Math.round(filteredChanges.reduce((s, d) => s + d.netChange, 0) / days),
-    };
-  }, [filteredChanges]);
-
-  return (
+    return (
     <>
-      {/* Code Change Trend + Tool Call Trend */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-        <Panel title="Code Change Trend" subtitle="Lines added, deleted, and net change">
-          {filteredChanges.length > 0 ? (
-            <ResponsiveContainer width="100%" height={240}>
-              <AreaChart data={filteredChanges}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
-                <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fill: '#78716c', fontSize: 10}} interval="preserveStartEnd" />
-                <YAxis tickFormatter={(v: number) => formatNumber(v)} tick={{ fill: '#78716c', fontSize: 10 }} width={50} />
-                <Tooltip
-                  content={({ active, payload, label}) => {
-                    if (!active || !payload?.length) return null;
-                    return (
-                      <div className="bg-white rounded-lg shadow-lg border border-stone-200 px-3 py-2 text-[12px]">
-                        <p className="font-semibold text-stone-700 mb-1">{formatDate(label)}</p>
-                        {payload.map((p, i) => (
-                          <p key={i} style={{ color: p.color }}>
-                            {p.name}: {formatNumber(p.value as number)}
-                          </p>
-                        ))}
-</div>
-                    );
-                  }}
-                />
-                <Area type="monotone" dataKey="linesAdded" name="Added" stroke={C[1]} fill={C[1]} fillOpacity={0.15} strokeWidth={2} />
-                <Area type="monotone" dataKey="linesDeleted" name="Deleted" stroke={C[3]} fill={C[3]} fillOpacity={0.08} strokeWidth={2} />
-                <Area type="monotone" dataKey="netChange" name="Net" stroke={C[0]} fill={C[0]} fillOpacity={0.05} strokeWidth={2} strokeDasharray="4 2" />
-                <Legend iconType="line" wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
-              </AreaChart>
-            </ResponsiveContainer>
-) : (
-            <p className="text-stone-400 text-[13px] py-8 text-center">No code change data available</p>
-          )}
-        </Panel>
-
-        <Panel title="Tool Call Trend" subtitle="Daily usage frequency by tool">
+      {/* Tool Call Trend */}
+      <div className="mb-4">
+                <Panel title="Tool Call Trend" subtitle="Daily usage frequency by tool">
           {filteredToolTrend.length > 0 ? (
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={filteredToolTrend}>

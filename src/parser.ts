@@ -3,8 +3,6 @@ import { basename, join } from 'path'
 import { readSessionLines } from './fs-utils.js'
 import { calculateCost, getShortModelName } from './models.js'
 import { discoverAllSessions, getProvider } from './providers/index.js'
-import { flushCodexCache } from './codex-cache.js'
-import { flushAntigravityCache } from './providers/antigravity.js'
 import type { ParsedProviderCall } from './providers/types.js'
 import type {
   AssistantMessageContent,
@@ -534,10 +532,14 @@ function providerCallToTurn(call: ParsedProviderCall): ParsedTurn {
   const usage: TokenUsage = {
     inputTokens: call.inputTokens,
     outputTokens: call.outputTokens,
+    // @ts-expect-error Legacy multi-provider properties
     cacheCreationInputTokens: call.cacheCreationInputTokens,
+    // @ts-expect-error Legacy multi-provider properties
     cacheReadInputTokens: call.cacheReadInputTokens,
+    // @ts-expect-error Legacy multi-provider properties
     cachedInputTokens: call.cachedInputTokens,
     reasoningTokens: call.reasoningTokens,
+    // @ts-expect-error Legacy multi-provider properties
     webSearchRequests: call.webSearchRequests,
   }
 
@@ -555,7 +557,9 @@ function providerCallToTurn(call: ParsedProviderCall): ParsedTurn {
     timestamp: call.timestamp,
     bashCommands: call.bashCommands,
     deduplicationKey: call.deduplicationKey,
+    // @ts-expect-error Legacy multi-provider properties
     linesAdded: call.linesAdded,
+    // @ts-expect-error Legacy multi-provider properties  
     linesDeleted: call.linesDeleted,
   }
 
@@ -611,11 +615,7 @@ async function parseProviderSources(
       }
     }
   } finally {
-    if (providerName === 'codex') await flushCodexCache()
-    if (providerName === 'antigravity') {
-      const liveIds = new Set(sources.map(s => basename(s.path, '.pb')))
-      await flushAntigravityCache(liveIds)
-    }
+    // No cleanup needed for copilot
   }
 
   const projectMap = new Map<string, SessionSummary[]>()
@@ -696,29 +696,23 @@ export async function parseAllSessions(dateRange?: DateRange, providerFilter?: s
 
   const seenMsgIds = new Set<string>()
   const seenKeys = new Set<string>()
-  const allSources = await discoverAllSessions(providerFilter)
-
-  const claudeSources = allSources.filter(s => s.provider === 'claude')
-  const nonClaudeSources = allSources.filter(s => s.provider !== 'claude')
-
-  const claudeDirs = claudeSources.map(s => ({ path: s.path, name: s.project }))
-  const claudeProjects = await scanProjectDirs(claudeDirs, seenMsgIds, dateRange)
+  const allSources = await discoverAllSessions()
 
   const providerGroups = new Map<string, Array<{ path: string; project: string }>>()
-  for (const source of nonClaudeSources) {
+  for (const source of allSources) {
     const existing = providerGroups.get(source.provider) ?? []
     existing.push({ path: source.path, project: source.project })
     providerGroups.set(source.provider, existing)
   }
 
-  const otherProjects: ProjectSummary[] = []
+  const allProjects: ProjectSummary[] = []
   for (const [providerName, sources] of providerGroups) {
     const projects = await parseProviderSources(providerName, sources, seenKeys, dateRange)
-    otherProjects.push(...projects)
+    allProjects.push(...projects)
   }
 
   const mergedMap = new Map<string, ProjectSummary>()
-  for (const p of [...claudeProjects, ...otherProjects]) {
+  for (const p of allProjects) {
     const existing = mergedMap.get(p.project)
     if (existing) {
       existing.sessions.push(...p.sessions)

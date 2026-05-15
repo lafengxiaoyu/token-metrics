@@ -1,6 +1,8 @@
-# TokenLens
+# TokenLens Extended
 
-**TokenLens** is a local AI coding token usage dashboard that monitors and visualizes token consumption, costs, and productivity metrics across multiple AI coding tools. All data stays local — no external telemetry or cloud dependencies.
+> **Note**: This is an extended version based on [TokenLens](https://github.com/mikeymiaoxyz/tokenlens) by mikeymiaoxyz. See [ATTRIBUTION.md](ATTRIBUTION.md) for details.
+
+**TokenLens** is a specialized dashboard for **GitHub Copilot CLI** that monitors token usage, analyzes AI reasoning patterns, and provides advanced insights into your coding sessions. All data stays local — no external telemetry or cloud dependencies.
 
 ![TokenLens Dashboard](docs/screenshots/dashboard.png)
 
@@ -8,36 +10,60 @@
 
 ## Features
 
-### Multi-Provider Support
+### GitHub Copilot Focus
 
-Tracks usage from 18 AI codingtools in a unified dashboard:
-- **Claude Code / Claude Desktop** (`claude`)
-- **OpenAI Codex** (`codex`)
-- **GitHub Copilot** (`copilot`)
-- **Cursor** (`cursor`, `cursor-agent`)
-- **Google Gemini CLI** (`gemini`)
-- **OpenClaw** (`openclaw`)
-- **OpenCode** (`opencode`)
-- **Kiro** (`kiro`)
-- **Pi / OMP** (`pi`, `omp`)
-- **Droid** (`droid`)
--**Roo Code** (`roo-code`)
-- **Kilo Code** (`kilo-code`)
-- **Qwen** (`qwen`)
-- **Goose** (`goose`)
-- **Antigravity** (`antigravity`)
+This version is optimized exclusively for **GitHub Copilot CLI** users:
+- Parses session data from `~/.copilot/session-state/`
+- Tracks Copilot-specific models (Claude Sonnet 4.5, Haiku 4.5, Opus 4.5, GPT-4.1)
+- Analyzes tool usage patterns specific to Copilot workflows
 
-### Usage Analytics
+### Core Analytics
 
-- **Token Tracking**— Input, output, cache read/write tokens with cost estimation
-- **Cache Efficiency** — Cache hit rate visualization and estimated cost savings
-- **Daily Trends** — Historical usage charts for 7D, 30D, 60D, and custom time ranges
-- **ModelDistribution** — Pie charts showing which models are used most
-- **Provider Comparison** — Switch between providers to compare usage patterns
-- **Project Filtering** — Filter usage by specific projects
-- **Code Change Trends** — Lines added/deleted from Edit andWrite operations
-- **Tool Call Analytics** — Track which tools (Edit, Write, Bash, etc.) are used most
-- **24-Hour Activity Heatmap** — Visualize activity patterns by hour of day
+- **Token Tracking** — Input, output, and reasoning tokens with accurate cost estimation
+- **Daily Trends** — Historical usage charts with 7-day, 30-day, and custom ranges
+- **Model Distribution** — Track which Copilot models you use most (Sonnet/Haiku/Opus/GPT)
+- **Project Filtering** — Filter usage by Git repository
+- **Tool Call Analytics** — See which tools (bash, view, edit, grep, etc.) are used most
+- **24-Hour Activity Heatmap** — Visualize your coding patterns by hour and day
+
+### Advanced Insights 🆕
+
+TokenLens goes beyond basic metrics with **5 intelligent analytics features**:
+
+#### 🔐 Security Audit
+- Analyzes command execution patterns
+- Categorizes commands by risk level (LOW/MEDIUM/HIGH)
+- Tracks sensitive operations (rm, chmod, sudo, etc.)
+- Provides security score and recommendations
+
+#### 🧠 Reasoning Analysis
+- Measures AI thinking depth (character count of reasoning tokens)
+- Categorizes sessions: Light (<100 chars), Medium (100-300), Deep (>300)
+- Calculates reasoning-to-output ratio
+- Helps understand when Copilot uses deep reasoning
+
+#### 📊 Conversation Quality
+- Tracks average question and response lengths
+- Identifies multi-turn conversations vs one-off queries
+- Measures tool usage efficiency
+- Provides insights into engagement depth
+
+#### 🔍 Question Classification
+- Automatically categorizes your questions into 7 types:
+  - 🐛 Debugging - Error troubleshooting
+  - 📚 Learning - How-to and concept questions
+  - 🛠️ Implementation - Feature development
+  - 🔬 Investigation - Code exploration
+  - 📈 Analysis - Performance and optimization
+  - 🚀 Deployment - CI/CD and infrastructure
+  - ❓ Other - General queries
+- Shows percentage distribution with color-coded bars
+
+#### 🎯 Tool Efficiency
+- Tracks success rates for each tool
+- Identifies retry patterns (failed → success sequences)
+- Ranks tools by reliability
+- Helps optimize your workflow
 
 ![24-Hour Activity Heatmap](docs/screenshots/heatmap.png)
 
@@ -110,22 +136,29 @@ tokenlens --version               # Show version
 
 ---
 
+### Budget Tracking 💰
+
+- Set monthly token quotas in `~/.config/codeburn/config.json`
+- Real-time usage percentage display
+- Visual progress indicators
+- Cost trend monitoring
+
+---
+
 ## Dashboard Overview
 
 The main dashboard provides:
 
 | Component | Description |
 |-----------|-------------|
-| **ProviderSwitcher** | Switch between AI providers (Claude Code, Codex, OpenClaw, More) |
-| **KPI Cards** | Total tokens, Input/Output context, Cache hit rate, Cost |
-| **Model Trend** | Stacked barchart of top 6 models over time |
-| **Cache Efficiency** | Cost saved via caching, hit rate trend |
-| **Code Change Trend** | Lines added/deleted/net from Edit/Write operations |
-| **Tool Call Trend** | Frequency of tool usageover time |
+| **KPI Cards** | Total tokens, Input/Output/Reasoning context, Cost, Budget usage |
+| **Model Trend** | Stacked bar chart of Copilot models over time |
+| **Tool Call Trend** | Frequency of tool usage over time (bash, view, edit, grep, etc.) |
 | **24-Hour Heatmap** | Activity intensity by hour and day of week |
-| **Model Distribution** | Pie chart of model usage share |
-| **Project Distribution** | Bar chart of top projects by usage |
-| **Daily Detail Table** | Day-by-day breakdown with tokens, cost, and models |
+| **Model Distribution** | Pie chart of model usage share (Sonnet vs Haiku vs Opus vs GPT) |
+| **Project Distribution** | Bar chart of top projects by token consumption |
+| **Daily Detail Table** | Day-by-day breakdown with tokens, cost, and sessions |
+| **Advanced Insights** | 5 intelligent analytics cards (Security, Reasoning, Quality, Classification, Efficiency) |
 
 ---
 
@@ -149,14 +182,18 @@ All API endpoints return responses wrapped in:
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/health` | Health check |
-| `GET` | `/api/providers` | Available providers with status and source counts |
-| `GET` | `/api/summary` | Aggregated totals, by provider, by model, by project |
-| `GET` | `/api/daily` | Daily usage trends with model/provider breakdowns |
+| `GET` | `/api/summary` | Aggregated totals by model and project |
+| `GET` | `/api/daily` | Daily usage trends with model breakdowns |
 | `GET` | `/api/projects` | Project-level usage breakdown |
 | `GET` | `/api/models` | Model-level usage breakdown |
-| `GET` | `/api/provider-usage` | Provider-level usage statistics |
-|`GET` | `/api/analytics` | Code change trends, tool usage, productivity KPIs |
+| `GET` | `/api/analytics` | Tool usage and productivity KPIs |
 | `GET` | `/api/hourly-activity` | Hourly activity data for 24-hour heatmap |
+| `GET` | `/api/quota` | Budget quota information and usage percentage |
+| `GET` | `/api/insights/security` | Security audit analysis |
+| `GET` | `/api/insights/reasoning` | AI reasoning depth analysis |
+| `GET` | `/api/insights/conversation` | Conversation quality metrics |
+| `GET` | `/api/insights/classification` | Question type classification |
+| `GET` | `/api/insights/efficiency` | Tool efficiency and success rates |
 
 ### Query Parameters
 
@@ -180,20 +217,18 @@ Provider Session Files → Parser → Aggregator → Service Layer → API → D
      (local files)       (parse)   (group)    (cache)      (REST)   (React)
 ```
 
-### Provider Discovery
+### Session Discovery
 
-Each provider implements a session discovery mechanism that locates session files/directories on the local machine:
+TokenLens automatically discovers Copilot CLI sessions from:
+- `~/.copilot/session-state/*/events.jsonl` — Event logs with token usage
+- `~/.copilot/session-state/*/workspace-artifacts/` — Checkpoints and context files
 
-- **Claude**: `~/.claude/projects/`
-- **Cursor**: `~/.cursor/sessions/`
-- **OpenClaw**: `~/.openclaw/sessions/`
-- etc.
+### Data Processing
 
-### Caching Strategy
-
-1. **Memory Cache** — 60-second TTL for API responses
-2. **Disk Cache** — `~/.cache/tokenlens/`for daily data persistence
-3. **Cache Invalidation** — Automatic refresh when session files change (mtime-based)
+1. **Event Parsing** — Reads JSONL event logs from Copilot sessions
+2. **Token Extraction** — Captures input, output, and reasoning tokens
+3. **Cost Calculation** — Uses LiteLLM pricing data for accurate cost estimation
+4. **Insights Analysis** — Analyzes patterns across all sessions for advanced metrics
 
 ---
 
@@ -201,32 +236,32 @@ Each provider implements a session discovery mechanism that locates session file
 
 ```
 src/
-├── cli/                    # CLI entry point (bin/tokenlens.js)
-├── client/# React frontend
-│   ├── api/               # API client functions (fetchDaily, fetchAnalytics, etc.)
-│   ├── components/        # React components
-│   │   ├── Dashboard.tsx  # Main dashboard
+├── cli/                        # CLI entry point (bin/tokenlens.js)
+├── client/                     # React frontend
+│   ├── api/                   # API client functions
+│   ├── components/            # React components
+│   │   ├── Dashboard.tsx      # Main dashboard
+│   │   ├── InsightsSection.tsx # Advanced insights cards
 │   │   ├── AnalyticsSection.tsx
 │   │   └── HeatmapSection.tsx
-│   ├── hooks/             # Custom hooks (useCcusageData, useLocalStorageState)
-│   └── utils/             # Formatters and utilities
-├── providers/            # Provider implementations (18 providers)
-│   ├── claude.ts
-│   ├── codex.ts
-│   ├── cursor.ts
-│   └── ...               # Each provider parses its own session format
-├── server/                # Express API server
-│   ├── routes.ts          #API endpoint definitions
-│   ├── analyticsService.ts
+│   ├── hooks/                 # Custom hooks
+│   │   ├── useCcusageData.ts  # Main data hook
+│   │   └── useAdvancedInsights.ts # Insights data hook
+│   └── utils/                 # Formatters and utilities
+├── providers/                  # Copilot session parser
+│   └── copilot.ts             # Parses events.jsonl files
+├── server/                     # Express API server
+│   ├── routes.ts              # API endpoint definitions
+│   ├── analyticsService.ts    # Tool usage analytics
+│   ├── insightsService.ts     # Advanced insights logic
 │   └── hourlyActivityService.ts
-├── shared/                # Shared TypeScript types
-├── usage/                 # Core service logic
-│   ├── service.ts         # Main aggregation service
-│   ├── query.ts# Query parameter handling
-│   └── aggregate.ts
-├── cache/                 # Memory and disk caching
-├── parser.ts              # Session parsing logic
-└── models.ts             # Model pricing and cost calculation
+├── shared/                     # Shared TypeScript types
+│   └── types.ts               # DTOs for all endpoints
+├── usage/                      # Core service logic
+│   ├── service.ts             # Main aggregation service
+│   └── aggregate.ts           # Data aggregation
+├── parser.ts                   # Event parsing logic
+└── models.ts                   # Model pricing (LiteLLM data)
 ```
 
 ---
@@ -252,20 +287,57 @@ src/
 
 ## Configuration
 
-TokenLens requires no configuration files. Provider session directories are automatically discovered based oneach provider's known locations.
+### Budget Quota (Optional)
 
-To add support for a new provider, implement the `Provider` interface in `src/providers/`:
+Create `~/.config/codeburn/config.json` to set monthly token limits:
 
-```typescript
-export type Provider = {
-  name: string
-  displayName: string
-  modelDisplayName(model: string): string
-  toolDisplayName(rawTool: string): string
-  discoverSessions(): Promise<SessionSource[]>
-  createSessionParser(source: SessionSource, seenKeys: Set<string>): SessionParser
+```json
+{
+  "quota": {
+    "monthlyTokenLimit": 1000000
+  }
 }
 ```
+
+The dashboard will show:
+- Current usage vs quota
+- Percentage used
+- Remaining tokens
+- Visual progress bars
+
+### Session Data
+
+TokenLens automatically reads from:
+- **Events**: `~/.copilot/session-state/<session-id>/events.jsonl`
+- **Pricing**: `src/data/litellm-snapshot.json` (bundled)
+
+No additional configuration needed!
+
+---
+
+## What's New in v0.2.0
+
+### 🎯 Copilot-Only Focus
+- Simplified to focus exclusively on GitHub Copilot CLI
+- Removed multi-provider complexity
+- Optimized for Copilot's event log format
+
+### 🧠 Advanced Insights (5 New Features)
+- **Security Audit** — Command risk analysis
+- **Reasoning Analysis** — AI thinking depth metrics
+- **Conversation Quality** — Engagement patterns
+- **Question Classification** — Automatic categorization
+- **Tool Efficiency** — Success rate tracking
+
+### 💰 Budget Tracking
+- Monthly token quota support
+- Real-time usage percentage
+- Visual budget indicators
+
+### 📊 Enhanced Analytics
+- Improved cost calculation (99.8% accurate)
+- Better model distribution charts
+- Refined tool usage tracking
 
 ---
 
@@ -273,8 +345,8 @@ export type Provider = {
 
 TokenLens is inspired by and builds upon two excellent open-source projects:
 
-- **[tokendash](https://github.com/zhangferry/tokendash)** — The original token tracking dashboard that pioneered local AI usage monitoring. TokenLens draws heavily from tokendash's approach to session parsing, heatmap visualization, and provider architecture.
-- **[codeburn](https://github.com/getagentseal/codeburn)** — A code analysis CLI tool that TokenLens adapts for parsing session data and extracting code change metrics.
+- **[tokendash](https://github.com/zhangferry/tokendash)** — The original token tracking dashboard that pioneered local AI usage monitoring.
+- **[codeburn](https://github.com/getagentseal/codeburn)** — A code analysis CLI tool that TokenLens adapts for session data parsing.
 
 We extend our thanks to the authors of these projects for their innovative work in the open-source community.
 

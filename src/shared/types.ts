@@ -2,8 +2,6 @@ export interface ModelBreakdown {
   modelName: string;
   inputTokens: number;
   outputTokens: number;
-  cacheCreationTokens: number;
-  cacheReadTokens: number;
   cost: number;
 }
 
@@ -11,8 +9,6 @@ export interface DailyEntry {
   date: string;
   inputTokens: number;
   outputTokens: number;
-  cacheCreationTokens: number;
-  cacheReadTokens: number;
   totalTokens: number;
   totalCost: number;
   modelsUsed: string[];
@@ -22,8 +18,6 @@ export interface DailyEntry {
 export interface Totals {
   inputTokens: number;
   outputTokens: number;
-  cacheCreationTokens: number;
-  cacheReadTokens: number;
   totalTokens: number;
   totalCost: number;
 }
@@ -55,11 +49,9 @@ export interface BlockEntry {
   isActive: boolean;
   isGap: boolean;
   entries: number;
-  tokenCounts:{
+  tokenCounts: {
     inputTokens: number;
     outputTokens: number;
-    cacheCreationInputTokens: number;
-    cacheReadInputTokens: number;
   };
   totalTokens: number;
   costUSD: number;
@@ -78,32 +70,13 @@ export interface ToolUsageEntry {
   count: number;
 }
 
-export interface DailyCodeChange {
-  date: string;
-  linesAdded: number;
-  linesDeleted: number;
-  netChange: number;
-  filesModified: number;
-}
-
 export interface DailyToolCall {
   date: string;
   [toolName: string]: string | number;
 }
 
-export interface ProductivityKPIs {
-  avgLinesPerEdit: number;
-  filesModifiedPerDay: number;
-  addDeleteRatio: number;
-  totalEdits: number;
-  totalFilesModified: number;
-  activeDaysWithEdits: number;
-}
-
 export interface AnalyticsResponse {
-codeChangeTrend: DailyCodeChange[];
   toolUsageDistribution: ToolUsageEntry[];
-  productivityKPIs: ProductivityKPIs;
   toolCallTrend: DailyToolCall[];
 }
 
@@ -139,12 +112,9 @@ export interface ProviderStatusDTO {
 export interface TokenTotalsDTO {
   inputTokens: number;
   outputTokens: number;
-  cacheReadTokens: number;
-  cacheWriteTokens: number;
   reasoningTokens: number;
   totalTokens: number;
   totalCost: number;
-  estimatedCost: boolean;
   calls: number;
   sessions: number;
   activeDays: number;
@@ -155,13 +125,10 @@ export interface ModelUsageDTO {
   provider: string;
   inputTokens: number;
   outputTokens: number;
-  cacheReadTokens: number;
-  cacheWriteTokens: number;
   reasoningTokens: number;
   totalTokens: number;
   totalCost: number;
-  estimatedCost: boolean;
-calls: number;
+  calls: number;
 }
 
 export interface ProviderUsageDTO {
@@ -171,7 +138,6 @@ export interface ProviderUsageDTO {
   outputTokens: number;
   totalTokens: number;
   totalCost: number;
-  estimatedCost: boolean;
   calls: number;
   sessions: number;
   projects: number;
@@ -181,12 +147,9 @@ export interface DailyUsageDTO {
   date: string;
   inputTokens: number;
   outputTokens: number;
-  cacheReadTokens: number;
-  cacheWriteTokens: number;
   reasoningTokens: number;
   totalTokens: number;
   totalCost: number;
-  estimatedCost: boolean;
   calls: number;
   sessions: number;
   providers: ProviderUsageDTO[];
@@ -201,14 +164,166 @@ export interface ProjectUsageDTO {
   outputTokens: number;
   totalTokens: number;
   totalCost: number;
-  estimatedCost: boolean;
   calls: number;
   sessions: number;
 }
 
 export interface SummaryDTO {
   totals: TokenTotalsDTO;
-  providers:ProviderUsageDTO[];
+  providers: ProviderUsageDTO[];
   models: ModelUsageDTO[];
   projects: ProjectUsageDTO[];
+}
+
+export interface QuotaUsage {
+  plan: {
+    id: string;
+    monthlyUsd: number;
+    provider: string;
+    resetDay?: number;
+  };
+  periodStart: string;
+  periodEnd: string;
+  spentApiEquivalentUsd: number;
+  budgetUsd: number;
+  percentUsed: number;
+  status: 'under' | 'near' | 'over';
+  projectedMonthUsd: number;
+  daysUntilReset: number;
+}
+
+export interface InsightsDTO {
+  avgTokensPerSession: number;
+  avgCostPerDay: number;
+  avgCallsPerDay: number;
+  peakHour: number | null;
+  weeklyTrend: number;
+  lastWeekCost: number;
+  prevWeekCost: number;
+}
+
+export type SensitiveCommand = {
+  command: string
+  count: number
+  risk: 'low' | 'medium' | 'high'
+  timestamp: string
+}
+
+export type SecurityAuditDTO = {
+  totalCommands: number
+  writeOperations: number
+  readOperations: number
+  riskLevel: 'low' | 'medium' | 'high'
+  sensitiveCommands: SensitiveCommand[]
+  pathsAccessed: string[]
+  commandsByRisk: {
+    low: number
+    medium: number
+    high: number
+  }
+  allCommandsByRisk: {
+    low: SensitiveCommand[]
+    medium: SensitiveCommand[]
+    high: SensitiveCommand[]
+  }
+}
+
+export type ReasoningDistribution = {
+  light: number   // reasoning < 100 chars
+  medium: number  // 100-300 chars
+  deep: number    // > 300 chars
+}
+
+export type ReasoningAnalysisDTO = {
+  avgReasoningLength: number
+  deepThinkingRate: number  // % with high reasoning ratio
+  reasoningTokenRatio: number
+  distribution: ReasoningDistribution
+  totalWithReasoning: number
+  totalMessages: number
+}
+
+export type ConversationQualityDTO = {
+  avgQuestionLength: number
+  avgResponseTokens: number
+  multiTurnRate: number
+  avgToolsPerQuestion: number
+  totalConversations: number
+  totalTurns: number
+  toolBreakdown: Array<{ name: string; count: number }>
+}
+
+export type QuestionCategory = 'debugging' | 'learning' | 'implementation' | 'investigation' | 'analysis' | 'deployment' | 'configuration' | 'other'
+
+export type QuestionClassificationDTO = {
+  debugging: number
+  learning: number
+  implementation: number
+  investigation: number
+  analysis: number
+  deployment: number
+  configuration: number
+  other: number
+  total: number
+  percentages: {
+    debugging: number
+    learning: number
+    implementation: number
+    investigation: number
+    analysis: number
+    deployment: number
+    configuration: number
+    other: number
+  }
+}
+
+export type ToolEfficiencyItem = {
+  name: string
+  total: number
+  succeeded: number
+  failed: number
+  successRate: number
+  avgDuration?: number
+}
+
+export type ToolEfficiencyDTO = {
+  overallSuccessRate: number
+  avgRetries: number
+  totalTools: number
+  byTool: ToolEfficiencyItem[]
+}
+
+// New analytics types
+export type FileActivityDTO = {
+  editVsViewRatio: number  // percentage of edits vs total file operations
+  totalEdits: number
+  totalViews: number
+  totalCreates: number
+  languageDistribution: Array<{
+    language: string
+    count: number
+    percentage: number
+  }>
+  topFiles: Array<{
+    path: string
+    edits: number
+    views: number
+    language: string
+  }>
+}
+
+export type SessionDurationDTO = {
+  avgDurationMinutes: number
+  medianDurationMinutes: number
+  totalSessions: number
+  durationDistribution: {
+    short: number      // < 15 min
+    medium: number     // 15-60 min
+    long: number       // 1-4 hours
+    veryLong: number   // > 4 hours
+  }
+  longestSession: {
+    durationMinutes: number
+    date: string
+  }
 }

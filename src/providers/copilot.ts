@@ -125,11 +125,7 @@ function parseLegacyEvents(content: string, sessionId: string, seenKeys: Set<str
         model: currentModel,
         inputTokens: 0,
         outputTokens,
-        cacheCreationInputTokens: 0,
-        cacheReadInputTokens: 0,
-        cachedInputTokens: 0,
         reasoningTokens: 0,
-        webSearchRequests: 0,
         costUSD,
         tools,
         bashCommands: [],
@@ -138,8 +134,6 @@ function parseLegacyEvents(content: string, sessionId: string, seenKeys: Set<str
         deduplicationKey: dedupKey,
         userMessage: pendingUserMessage,
         sessionId,
-        linesAdded: 0,
-        linesDeleted: 0,
       })
 
       pendingUserMessage = ''
@@ -258,11 +252,7 @@ function parseTranscriptEvents(content: string, sessionId: string, seenKeys: Set
         model,
         inputTokens,
         outputTokens,
-        cacheCreationInputTokens: 0,
-        cacheReadInputTokens: 0,
-        cachedInputTokens: 0,
         reasoningTokens,
-        webSearchRequests: 0,
         costUSD,
         tools,
         bashCommands: [],
@@ -271,8 +261,6 @@ function parseTranscriptEvents(content: string, sessionId: string, seenKeys: Set
         deduplicationKey: dedupKey,
         userMessage: pendingUserMessage,
         sessionId,
-        linesAdded: 0,
-        linesDeleted: 0,
       })
 
       pendingUserMessage = ''
