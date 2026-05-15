@@ -2,7 +2,17 @@
 
 > **Note**: This is an extended version based on [TokenLens](https://github.com/mikeymiaoxyz/tokenlens) by mikeymiaoxyz. See [ATTRIBUTION.md](ATTRIBUTION.md) for details.
 
-**TokenLens** is a specialized dashboard for **GitHub Copilot CLI** that monitors token usage, analyzes AI reasoning patterns, and provides advanced insights into your coding sessions. All data stays local — no external telemetry or cloud dependencies.
+**TokenLens Extended** is a specialized dashboard for **GitHub Copilot CLI** that monitors token usage, analyzes AI reasoning patterns, and provides advanced insights into your coding sessions. All data stays local — no external telemetry or cloud dependencies.
+
+## ✨ What's New in Extended Version
+
+This fork adds **Development Habits Analytics** with three powerful new features:
+
+- **⚡ Edit vs View Ratio** - Understand your productivity patterns (editing vs reading code)
+- **🔤 Language Distribution** - Visualize your tech stack usage across 30+ languages
+- **⏱️ Session Duration Analysis** - Track and analyze your work session patterns
+
+Plus all the original features from TokenLens!
 
 ![TokenLens Dashboard](docs/screenshots/dashboard.png)
 
@@ -28,7 +38,7 @@ This version is optimized exclusively for **GitHub Copilot CLI** users:
 
 ### Advanced Insights 🆕
 
-TokenLens goes beyond basic metrics with **5 intelligent analytics features**:
+TokenLens goes beyond basic metrics with **8 intelligent analytics features**:
 
 #### 🔐 Security Audit
 - Analyzes command execution patterns
@@ -65,6 +75,33 @@ TokenLens goes beyond basic metrics with **5 intelligent analytics features**:
 - Ranks tools by reliability
 - Helps optimize your workflow
 
+#### ⚡ Edit vs View Ratio (New in Extended Version)
+- Analyzes your code interaction patterns
+- Tracks edit, view, and create operations
+- Visual pie chart showing productivity balance
+- Intelligent insights based on your ratio:
+  - High editing: Productive implementation mode
+  - Balanced: Healthy review and coding mix
+  - High viewing: Learning and exploration mode
+
+#### 🔤 Programming Language Distribution (New in Extended Version)
+- Automatically detects 30+ programming languages
+- Shows percentage breakdown of your tech stack
+- Visualizes language usage with color-coded progress bars
+- Identifies your primary languages and diversity
+- Based on file extensions from edit/create operations
+
+#### ⏱️ Session Duration Analysis (New in Extended Version)
+- Tracks how long you work in each Copilot session
+- Categorizes sessions into 4 buckets:
+  - 🟢 Short (<15 minutes) - Quick consultations
+  - 🔵 Medium (15-60 minutes) - Focused work
+  - 🟡 Long (1-4 hours) - Deep work sessions
+  - 🔴 Very Long (>4 hours) - Extended coding marathons
+- Shows average, median, and longest session durations
+- Distribution visualization with horizontal bar chart
+- Provides insights into your work patterns
+
 ![24-Hour Activity Heatmap](docs/screenshots/heatmap.png)
 
 ### Local-First Design
@@ -87,15 +124,27 @@ TokenLens goes beyond basic metrics with **5 intelligent analytics features**:
 
 ### Installation
 
-**Using npm (global install - recommended):**
+**From GitHub (recommended for this extended version):**
 ```bash
-npm install -g @mikeyxyz/tokenlens
+npm install -g github:lafengxiaoyu/tokenlens-extended
 tokenlens
 ```
 
-**Using npx (no install required):**
+**Clone and install locally:**
 ```bash
-npx @mikeyxyz/tokenlens
+git clone https://github.com/lafengxiaoyu/tokenlens-extended.git
+cd tokenlens-extended
+npm install
+npm run build
+npm install -g .
+tokenlens
+```
+
+**Using the original version:**
+```bash
+# Original version by mikeymiaoxyz (without Development Habits features)
+npm install -g @mikeyxyz/tokenlens
+tokenlens
 ```
 
 **Using pnpm:**
@@ -354,4 +403,19 @@ We extend our thanks to the authors of these projects for their innovative work 
 
 ## License
 
-MIT
+MIT License
+
+- Original work: Copyright (c) 2026 mikeymiaoxyz
+- Modifications: Copyright (c) 2026 lafengxiaoyu
+
+See [LICENSE](LICENSE) and [ATTRIBUTION.md](ATTRIBUTION.md) for details.
+
+## Credits
+
+This project is based on the excellent work by [mikeymiaoxyz/tokenlens](https://github.com/mikeymiaoxyz/tokenlens). The extended version adds Development Habits analytics features while maintaining all original functionality.
+
+**Give the original project a ⭐ if you find this useful!**
+
+## Contributing
+
+Issues and pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change.
