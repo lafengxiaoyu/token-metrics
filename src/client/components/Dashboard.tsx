@@ -454,14 +454,6 @@ export function Dashboard() {
         </div>
       )}
 
-      <div className="mb-6">
-        <EfficiencyCoachSection
-          data={efficiencyCoachData.data ?? null}
-          loading={efficiencyCoachData.loading}
-          error={efficiencyCoachData.error}
-        />
-      </div>
-
       {/* Quota Insights Row - shown only if quota is configured */}
       {quotaData.data && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -673,6 +665,14 @@ export function Dashboard() {
         sessionDurations={sessionDurations}
         loading={additionalLoading}
       />
+
+      <div className="mt-4">
+        <EfficiencyCoachSection
+          data={efficiencyCoachData.data ?? null}
+          loading={efficiencyCoachData.loading}
+          error={efficiencyCoachData.error}
+        />
+      </div>
     </div>
   );
 }

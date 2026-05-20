@@ -3,8 +3,12 @@ import type {
   EfficiencyCoachBand,
   EfficiencyCoachDTO,
   EfficiencyCoachFinding,
+  EfficiencyModelInsight,
+  EfficiencyProjectInsight,
+  EfficiencyPromptCoach,
   EfficiencyScoreBreakdown,
   EfficiencySessionReview,
+  EfficiencyWeeklyReview,
 } from '../shared/types.js'
 import type { ProjectSummary, SessionSummary, TaskCategory } from '../types.js'
 import { CATEGORY_LABELS } from '../types.js'
@@ -33,6 +37,9 @@ type SessionMetrics = {
   avgPromptLength: number
   hasExplicitScope: boolean
   categoryP75Tokens: number
+  firstPrompt: string
+  rewrittenPrompt: string
+  models: string[]
 }
 
 type ScoredSession = SessionMetrics & {
@@ -111,23 +118,55 @@ function isDeliveryCategory(category: TaskCategory): boolean {
   return ['coding', 'debugging', 'feature', 'refactoring', 'testing', 'build/deploy'].includes(category)
 }
 
+function isSimpleCategory(category: TaskCategory): boolean {
+  return ['conversation', 'exploration', 'planning', 'brainstorming', 'general'].includes(category)
+}
+
+function rewritePrompt(prompt: string, category: TaskCategory, project: string): string {
+  const compact = prompt.trim().replace(/\s+/g, ' ')
+  const target = compact.length > 0 ? compact.slice(0, 180) : 'the issue'
+  if (isDeliveryCategory(category)) {
+    return `Goal: ${target}. Scope: start with the most likely files in ${project}. Success: identify the cause, make the smallest safe change, and run one verification command. Stop if the same approach fails twice.`
+  }
+  return `Goal: ${target}. Scope: inspect only the smallest relevant area first. Success: return a concise finding with the files or evidence used before expanding the search.`
+}
+
+function sessionModels(session: SessionSummary): string[] {
+  const models = new Set<string>()
+  for (const turn of session.turns) {
+    for (const call of turn.assistantCalls) {
+      if (call.model && call.model !== 'synthetic' && call.model !== '<synthetic>') models.add(call.model)
+    }
+  }
+  return [...models]
+}
+
+function sessionTimeline(scored: ScoredSession): Array<{ label: string; detail: string }> {
+  return [
+    { label: 'Start', detail: scored.session.firstTimestamp.slice(0, 16).replace('T', ' ') },
+    { label: 'Prompt', detail: scored.firstPrompt || 'No user prompt captured' },
+    { label: 'Activity', detail: `${scored.readCalls} reads/searches, ${scored.editCalls} edits, ${scored.bashCalls} shell calls` },
+    { label: 'Result', detail: `${scored.score}/100 with ${scored.retries} retry signals` },
+  ]
+}
+
 function buildRecommendation(metrics: SessionMetrics, reasons: string[]): string {
   if (metrics.retries >= 2) {
-    return '下次先设置重试上限：同一方案失败两次后停下来，让 Copilot 重新说明假设、证据和下一步验证命令。'
+    return 'Set a retry limit: after the same approach fails twice, ask Copilot to restate its assumptions, evidence, and next verification step.'
   }
   if (metrics.editTurns === 0 && isDeliveryCategory(metrics.category)) {
-    return '把请求改成可交付形式：明确目标文件、期望行为和验证方式，并要求 Copilot 在定位后给出最小修改。'
+    return 'Start narrower: name the likely files or module first, then ask Copilot to confirm the cause before expanding the search.'
   }
   if (metrics.readCalls > 30 || (metrics.editTurns > 0 && metrics.readCalls / Math.max(metrics.editTurns, 1) > 12)) {
-    return '给探索加边界：指定最多先看哪些目录/文件，并要求先汇报定位结论，再继续扩大范围。'
+    return 'Bound the first pass: limit the initial search area and ask for a short finding before opening more files.'
   }
   if (metrics.promptScore < 55) {
-    return '补上上下文三件套：目标、范围、成功标准。比如“只检查 X 和 Y，找出 Z 的原因，先不要改代码”。'
+    return 'Add three pieces of context up front: goal, scope, and success criteria.'
   }
   if (metrics.totalTokens > metrics.categoryP75Tokens && metrics.categoryP75Tokens > 0) {
-    return '把长任务拆成 20-40 分钟的小会话，每段都要求产出一个结论、一个修改或一个验证结果。'
+    return 'Split long work into 20-40 minute checkpoints, each ending with a finding, change, or verification result.'
   }
-  return reasons[0] ?? '保持这种节奏：目标清楚、探索收敛，并用验证命令确认结果。'
+  return reasons[0] ?? 'Keep this pattern: clear scope, focused exploration, and a concrete verification step.'
 }
 
 function scoreSession(metrics: SessionMetrics): ScoredSession {
@@ -172,14 +211,14 @@ function scoreSession(metrics: SessionMetrics): ScoredSession {
   )
 
   const reasons: string[] = []
-  if (deliveryTask && metrics.editTurns === 0 && metrics.totalTokens > 0) reasons.push('交付型任务没有编辑产出')
-  if (metrics.readCalls > 30) reasons.push(`探索偏宽，读取/搜索 ${metrics.readCalls} 次`)
-  if (deliveryTask && readEditRatio > 12) reasons.push(`读取与编辑比例偏高，约 ${readEditRatio.toFixed(1)}:1`)
-  if (metrics.retries >= 2) reasons.push(`出现 ${metrics.retries} 次返工信号`)
-  if (metrics.durationMinutes > 60 && metrics.editTurns <= 1) reasons.push(`长会话推进偏慢，${metrics.durationMinutes} 分钟内编辑较少`)
-  if (metrics.promptScore < 55) reasons.push('初始请求缺少明确范围或成功标准')
-  if (tokenRatio > 1.5 && metrics.categoryP75Tokens > 0) reasons.push('token 消耗高于同类任务常见水平')
-  if (reasons.length === 0) reasons.push('目标、探索和产出比较平衡')
+  if (deliveryTask && metrics.editTurns === 0 && metrics.totalTokens > 0) reasons.push('No edit output for a delivery-oriented task')
+  if (metrics.readCalls > 30) reasons.push(`Broad exploration: ${metrics.readCalls} read/search calls`)
+  if (deliveryTask && readEditRatio > 12) reasons.push(`High read-to-edit ratio: about ${readEditRatio.toFixed(1)}:1`)
+  if (metrics.retries >= 2) reasons.push(`${metrics.retries} retry signals`)
+  if (metrics.durationMinutes > 60 && metrics.editTurns <= 1) reasons.push(`Slow progress: ${metrics.durationMinutes} minutes with little editing`)
+  if (metrics.promptScore < 55) reasons.push('Opening prompt lacks clear scope or success criteria')
+  if (tokenRatio > 1.5 && metrics.categoryP75Tokens > 0) reasons.push('Token usage is above the usual level for this task type')
+  if (reasons.length === 0) reasons.push('Scope, exploration, and output are balanced')
 
   return {
     ...metrics,
@@ -208,6 +247,10 @@ function toReview(scored: ScoredSession): EfficiencySessionReview {
     bashCalls: scored.bashCalls,
     retries: scored.retries,
     promptScore: scored.promptScore,
+    firstPrompt: scored.firstPrompt,
+    rewrittenPrompt: scored.rewrittenPrompt,
+    models: scored.models,
+    timeline: sessionTimeline(scored),
     reasons: scored.reasons,
     recommendation: scored.recommendation,
   }
@@ -231,71 +274,219 @@ function buildFindings(scored: ScoredSession[], breakdown: EfficiencyScoreBreakd
 
   if (lowSessions.length > 0) {
     findings.push({
-      title: `${lowSessions.length} 个会话值得复盘`,
+      title: `${lowSessions.length} sessions worth reviewing`,
       severity: lowSessions.some(s => s.band === 'low') ? 'high' : 'medium',
-      detail: '这些会话通常同时出现高消耗、低产出、探索过宽或返工信号。',
-      recommendation: '优先看下面的低效会话列表，把对应建议复制成下一次 Copilot CLI 的开场约束。',
+      detail: 'These sessions combine higher spend with weak output, broad exploration, or retry signals.',
+      recommendation: 'Review the candidates below and reuse only the most relevant constraint next time.',
     })
   }
   if (noEditDelivery.length > 0) {
     findings.push({
-      title: '交付型任务存在低产出信号',
+      title: 'Delivery tasks show weak output signals',
       severity: 'medium',
-      detail: `${noEditDelivery.length} 个交付型会话没有明显编辑产出。`,
-      recommendation: '对实现、调试、测试类任务，开场就定义“最终需要修改/验证什么”，避免只停留在探索。'
+      detail: `${noEditDelivery.length} delivery-oriented sessions had no clear edit output.`,
+      recommendation: 'For implementation, debugging, or testing work, define the expected verification step before exploration expands.'
     })
   }
   if (retryHeavy.length > 0) {
     findings.push({
-      title: '返工次数偏高',
+      title: 'Retry rate is elevated',
       severity: 'medium',
-      detail: `${retryHeavy.length} 个会话出现多次 edit-test-edit 式返工信号。`,
-      recommendation: '让 Copilot 在第二次失败后停止试错，先重新列假设、证据和可验证的最小实验。'
+      detail: `${retryHeavy.length} sessions show repeated edit-test-edit retry patterns.`,
+      recommendation: 'After the second failed attempt, pause trial-and-error and ask for assumptions, evidence, and the smallest testable experiment.'
     })
   }
   if (broadExploration.length > 0) {
     findings.push({
-      title: '探索范围可以更收敛',
+      title: 'Exploration can be more focused',
       severity: breakdown.focus < 60 ? 'high' : 'medium',
-      detail: `${broadExploration.length} 个会话读取或搜索次数超过 30 次。`,
-      recommendation: '给 Copilot 明确第一轮探索边界，比如“先只看 routes、service 和对应测试”。'
+      detail: `${broadExploration.length} sessions used more than 30 read or search calls.`,
+      recommendation: 'Set a first-pass boundary, such as checking only routes, services, and related tests before expanding.'
     })
   }
   if (vaguePrompts.length > 0) {
     findings.push({
-      title: '提示词清晰度有提升空间',
+      title: 'Prompt clarity can improve',
       severity: 'low',
-      detail: `${vaguePrompts.length} 个会话的请求较短，缺少范围、目标或成功标准。`,
-      recommendation: '使用“目标 + 范围 + 验证标准”的格式开场，通常能减少无效读取和后续返工。'
+      detail: `${vaguePrompts.length} sessions started with short prompts that missed scope, goal, or success criteria.`,
+      recommendation: 'Use a goal + scope + success criteria format to reduce unnecessary reads and follow-up retries.'
     })
   }
 
   if (findings.length === 0) {
     findings.push({
-      title: '整体使用节奏健康',
+      title: 'Overall usage rhythm is healthy',
       severity: 'low',
-      detail: '当前范围内没有明显的高消耗低产出模式。',
-      recommendation: '继续保持明确范围、阶段性验证和小步交付的使用方式。'
+      detail: 'No obvious high-spend, low-output pattern was detected in the selected range.',
+      recommendation: 'Keep using clear scope, staged verification, and small delivery steps.'
     })
   }
 
   return findings.slice(0, 5)
 }
 
-export async function getEfficiencyCoach(query: UsageQuery): Promise<EfficiencyCoachDTO> {
-  const projects = await loadProjects(query)
+function emptyCoach(summary: string): EfficiencyCoachDTO {
+  return {
+    score: 0,
+    band: 'watch',
+    summary,
+    breakdown: { outcome: 0, focus: 0, reliability: 0, cost: 0, prompt: 0 },
+    findings: [],
+    lowEfficiencySessions: [],
+    highEfficiencySessions: [],
+    categories: [],
+    weeklyReview: {
+      sessions: 0,
+      totalTokens: 0,
+      totalCost: 0,
+      avgScore: 0,
+      topTaskType: 'N/A',
+      bestDay: null,
+      focus: 'No sessions available yet.',
+      wins: [],
+      improvements: [],
+    },
+    promptCoach: {
+      avgPromptScore: 0,
+      vaguePromptRate: 0,
+      commonGaps: [],
+      examples: [],
+    },
+    modelInsights: [],
+    projectInsights: [],
+  }
+}
+
+function buildWeeklyReview(scored: ScoredSession[], categories: EfficiencyCategorySummary[], findings: EfficiencyCoachFinding[]): EfficiencyWeeklyReview {
+  const byDate = new Map<string, ScoredSession[]>()
+  for (const session of scored) {
+    const date = session.session.firstTimestamp.slice(0, 10)
+    byDate.set(date, [...(byDate.get(date) ?? []), session])
+  }
+  const bestDay = [...byDate.entries()]
+    .map(([date, sessions]) => ({
+      date,
+      score: sessions.reduce((sum, session) => sum + session.score, 0) / sessions.length,
+    }))
+    .sort((a, b) => b.score - a.score)[0]?.date ?? null
+
+  const totalTokens = scored.reduce((sum, session) => sum + session.totalTokens, 0)
+  const totalCost = scored.reduce((sum, session) => sum + session.session.totalCostUSD, 0)
+  const highSessions = scored.filter(session => session.band === 'high')
+  const broadSessions = scored.filter(session => session.readCalls > 30)
+  const retrySessions = scored.filter(session => session.retries > 0)
+  const vagueSessions = scored.filter(session => session.promptScore < 55)
+
+  return {
+    sessions: scored.length,
+    totalTokens,
+    totalCost: Number(totalCost.toFixed(4)),
+    avgScore: clampScore(scored.reduce((sum, session) => sum + session.score, 0) / scored.length),
+    topTaskType: categories[0]?.category ?? 'N/A',
+    bestDay,
+    focus: findings[0]?.title ?? 'Keep the current workflow steady.',
+    wins: [
+      highSessions.length > 0 ? `${highSessions.length} sessions scored in the high-efficiency band.` : '',
+      retrySessions.length === 0 ? 'No retry-heavy sessions detected.' : '',
+      broadSessions.length === 0 ? 'Exploration stayed focused across the selected range.' : '',
+    ].filter(Boolean),
+    improvements: [
+      broadSessions.length > 0 ? `Constrain first-pass exploration in ${broadSessions.length} sessions.` : '',
+      retrySessions.length > 0 ? `Add stop conditions for ${retrySessions.length} sessions with retry signals.` : '',
+      vagueSessions.length > 0 ? `Clarify scope and success criteria in ${vagueSessions.length} opening prompts.` : '',
+    ].filter(Boolean).slice(0, 3),
+  }
+}
+
+function buildPromptCoach(scored: ScoredSession[]): EfficiencyPromptCoach {
+  const vague = scored.filter(session => session.promptScore < 55)
+  const missingScope = scored.filter(session => !session.hasExplicitScope)
+  const longSpendVague = vague.filter(session => session.totalTokens > session.categoryP75Tokens)
+  const commonGaps = [
+    missingScope.length > 0 ? `${missingScope.length} sessions did not name a file, folder, or clear scope.` : '',
+    vague.length > 0 ? `${vague.length} sessions started without enough goal/scope/success detail.` : '',
+    longSpendVague.length > 0 ? `${longSpendVague.length} vague prompts led to above-baseline token usage.` : '',
+  ].filter(Boolean)
+
+  const examples = vague
+    .sort((a, b) => b.totalTokens - a.totalTokens)
+    .slice(0, 3)
+    .map(session => ({
+      before: session.firstPrompt || 'No prompt captured',
+      after: session.rewrittenPrompt,
+      reason: session.reasons.find(reason => reason.includes('prompt') || reason.includes('scope')) ?? 'The rewritten prompt adds scope and a measurable stopping point.',
+    }))
+
+  return {
+    avgPromptScore: clampScore(scored.reduce((sum, session) => sum + session.promptScore, 0) / scored.length),
+    vaguePromptRate: Math.round((vague.length / scored.length) * 100),
+    commonGaps,
+    examples,
+  }
+}
+
+function buildModelInsights(scored: ScoredSession[]): EfficiencyModelInsight[] {
+  const byModel = new Map<string, ScoredSession[]>()
+  for (const session of scored) {
+    for (const model of session.models.length > 0 ? session.models : ['Unknown']) {
+      byModel.set(model, [...(byModel.get(model) ?? []), session])
+    }
+  }
+
+  return [...byModel.entries()].map(([model, sessions]) => {
+    const totalCost = sessions.reduce((sum, session) => sum + session.session.totalCostUSD, 0)
+    const simpleTaskShare = Math.round((sessions.filter(session => isSimpleCategory(session.category)).length / sessions.length) * 100)
+    const avgScore = clampScore(sessions.reduce((sum, session) => sum + session.score, 0) / sessions.length)
+    return {
+      model,
+      sessions: sessions.length,
+      avgScore,
+      totalTokens: sessions.reduce((sum, session) => sum + session.totalTokens, 0),
+      totalCost: Number(totalCost.toFixed(4)),
+      simpleTaskShare,
+      recommendation: simpleTaskShare >= 60 && totalCost > 0
+        ? 'This model is often used for simpler tasks; consider reserving it for complex debugging, refactors, or architecture work.'
+        : avgScore < 60
+          ? 'Low score for this model usually points to task framing or retry loops, not necessarily model quality.'
+          : 'Usage looks reasonable for the observed task mix.',
+    }
+  }).sort((a, b) => b.totalCost - a.totalCost || b.totalTokens - a.totalTokens).slice(0, 5)
+}
+
+function buildProjectInsights(scored: ScoredSession[]): EfficiencyProjectInsight[] {
+  const byProject = new Map<string, ScoredSession[]>()
+  for (const session of scored) {
+    byProject.set(session.project.project, [...(byProject.get(session.project.project) ?? []), session])
+  }
+
+  return [...byProject.entries()].map(([project, sessions]) => {
+    const retryRate = Math.round((sessions.filter(session => session.retries > 0).length / sessions.length) * 100)
+    const broadExplorationRate = Math.round((sessions.filter(session => session.readCalls > 30).length / sessions.length) * 100)
+    const avgScore = clampScore(sessions.reduce((sum, session) => sum + session.score, 0) / sessions.length)
+    const totalCost = sessions.reduce((sum, session) => sum + session.session.totalCostUSD, 0)
+    return {
+      project,
+      sessions: sessions.length,
+      avgScore,
+      totalTokens: sessions.reduce((sum, session) => sum + session.totalTokens, 0),
+      totalCost: Number(totalCost.toFixed(4)),
+      retryRate,
+      broadExplorationRate,
+      recommendation: broadExplorationRate >= 40
+        ? 'Create a small project map or ask Copilot to start from known entry points before searching broadly.'
+        : retryRate >= 40
+          ? 'Add verification checkpoints and stop conditions before allowing repeated fixes.'
+          : avgScore >= 75
+            ? 'This project is using Copilot efficiently; keep the current workflow.'
+            : 'Review the lowest-scoring sessions for this project and tighten the first-pass scope.',
+    }
+  }).sort((a, b) => a.avgScore - b.avgScore || b.totalCost - a.totalCost).slice(0, 6)
+}
+
+export function analyzeEfficiencyCoach(projects: ProjectSummary[]): EfficiencyCoachDTO {
   const sessions = projects.flatMap(project => project.sessions.map(session => ({ project, session })))
   if (sessions.length === 0) {
-    return {
-      score: 0,
-      band: 'watch',
-      summary: '当前筛选范围内还没有可分析的 Copilot CLI 会话。',
-      breakdown: { outcome: 0, focus: 0, reliability: 0, cost: 0, prompt: 0 },
-      findings: [],
-      lowEfficiencySessions: [],
-      highEfficiencySessions: [],
-      categories: [],
-    }
+    return emptyCoach('No Copilot CLI sessions are available in the selected range yet.')
   }
 
   const categoryTokens = new Map<TaskCategory, number[]>()
@@ -308,6 +499,7 @@ export async function getEfficiencyCoach(query: UsageQuery): Promise<EfficiencyC
   const scored = sessions.map(({ project, session }) => {
     const category = dominantCategory(session)
     const prompt = scorePrompt(session.turns.map(turn => turn.userMessage))
+    const firstPrompt = session.turns.map(turn => turn.userMessage.trim()).find(Boolean) ?? ''
     const metrics: SessionMetrics = {
       session,
       project,
@@ -325,6 +517,9 @@ export async function getEfficiencyCoach(query: UsageQuery): Promise<EfficiencyC
       avgPromptLength: prompt.avgLength,
       hasExplicitScope: prompt.hasExplicitScope,
       categoryP75Tokens: percentile(categoryTokens.get(category) ?? [], 75),
+      firstPrompt,
+      rewrittenPrompt: rewritePrompt(firstPrompt, category, project.project),
+      models: sessionModels(session),
     }
     return scoreSession(metrics)
   })
@@ -365,21 +560,32 @@ export async function getEfficiencyCoach(query: UsageQuery): Promise<EfficiencyC
     .map(toReview)
 
   const summary = score >= 85
-    ? 'Copilot CLI 使用整体很高效：产出、聚焦和返工控制都不错。'
+    ? 'Copilot CLI usage looks highly efficient: output, focus, and retry control are all strong.'
     : score >= 65
-      ? 'Copilot CLI 使用整体健康，但有一些会话可以通过更清晰的范围和验证节奏继续提效。'
+      ? 'Copilot CLI usage looks healthy, with room to improve scope clarity and verification rhythm in some sessions.'
       : score >= 45
-        ? 'Copilot CLI 使用有明显优化空间，主要关注高消耗低产出、探索过宽和返工。'
-        : 'Copilot CLI 使用效率偏低，建议先用低效会话列表做复盘，重建开场提示和停止条件。'
+        ? 'Copilot CLI usage has clear optimization opportunities, especially high-spend low-output sessions, broad exploration, and retries.'
+        : 'Copilot CLI usage looks inefficient in this range. Start by reviewing the flagged sessions and adding clearer stopping conditions.'
+
+  const findings = buildFindings(scored, breakdown)
 
   return {
     score,
     band: bandFor(score),
     summary,
     breakdown,
-    findings: buildFindings(scored, breakdown),
+    findings,
     lowEfficiencySessions,
     highEfficiencySessions,
     categories,
+    weeklyReview: buildWeeklyReview(scored, categories, findings),
+    promptCoach: buildPromptCoach(scored),
+    modelInsights: buildModelInsights(scored),
+    projectInsights: buildProjectInsights(scored),
   }
+}
+
+export async function getEfficiencyCoach(query: UsageQuery): Promise<EfficiencyCoachDTO> {
+  const projects = await loadProjects(query)
+  return analyzeEfficiencyCoach(projects)
 }

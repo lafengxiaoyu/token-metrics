@@ -31,6 +31,6 @@ export function formatPercent(n: number): string {
 
 export function formatProjectName(project: string): string {
   if (!project) return '';
-  // 直接返回完整项目名，不做分割处理
+  // Return the full project name without splitting paths.
   return project;
 }

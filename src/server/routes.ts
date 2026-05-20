@@ -249,6 +249,25 @@ try {
           lowEfficiencySessions: [],
           highEfficiencySessions: [],
           categories: [],
+          weeklyReview: {
+            sessions: 0,
+            totalTokens: 0,
+            totalCost: 0,
+            avgScore: 0,
+            topTaskType: 'N/A',
+            bestDay: null,
+            focus: 'Efficiency coach analysis is temporarily unavailable.',
+            wins: [],
+            improvements: [],
+          },
+          promptCoach: {
+            avgPromptScore: 0,
+            vaguePromptRate: 0,
+            commonGaps: [],
+            examples: [],
+          },
+          modelInsights: [],
+          projectInsights: [],
         }, [{ code: 'EFFICIENCY_COACH_ERROR', message: err instanceof Error ? err.message : String(err) }]));
       }
     }

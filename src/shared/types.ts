@@ -361,6 +361,13 @@ export type EfficiencySessionReview = {
   bashCalls: number
   retries: number
   promptScore: number
+  firstPrompt: string
+  rewrittenPrompt: string
+  models: string[]
+  timeline: Array<{
+    label: string
+    detail: string
+  }>
   reasons: string[]
   recommendation: string
 }
@@ -374,6 +381,50 @@ export type EfficiencyCategorySummary = {
   retryRate: number
 }
 
+export type EfficiencyWeeklyReview = {
+  sessions: number
+  totalTokens: number
+  totalCost: number
+  avgScore: number
+  topTaskType: string
+  bestDay: string | null
+  focus: string
+  wins: string[]
+  improvements: string[]
+}
+
+export type EfficiencyPromptCoach = {
+  avgPromptScore: number
+  vaguePromptRate: number
+  commonGaps: string[]
+  examples: Array<{
+    before: string
+    after: string
+    reason: string
+  }>
+}
+
+export type EfficiencyModelInsight = {
+  model: string
+  sessions: number
+  avgScore: number
+  totalTokens: number
+  totalCost: number
+  simpleTaskShare: number
+  recommendation: string
+}
+
+export type EfficiencyProjectInsight = {
+  project: string
+  sessions: number
+  avgScore: number
+  totalTokens: number
+  totalCost: number
+  retryRate: number
+  broadExplorationRate: number
+  recommendation: string
+}
+
 export type EfficiencyCoachDTO = {
   score: number
   band: EfficiencyCoachBand
@@ -383,4 +434,8 @@ export type EfficiencyCoachDTO = {
   lowEfficiencySessions: EfficiencySessionReview[]
   highEfficiencySessions: EfficiencySessionReview[]
   categories: EfficiencyCategorySummary[]
+  weeklyReview: EfficiencyWeeklyReview
+  promptCoach: EfficiencyPromptCoach
+  modelInsights: EfficiencyModelInsight[]
+  projectInsights: EfficiencyProjectInsight[]
 }
