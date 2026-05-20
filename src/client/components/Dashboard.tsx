@@ -4,7 +4,7 @@ import {
   ComposedChart, AreaChart, Area, PieChart, Pie,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import {fetchDaily, fetchProjects, fetchAnalytics, fetchHourlyActivity, fetchQuota, fetchInsights, fetchFileActivity, fetchSessionDurations, TimeRangeKey } from '../api/client.js';
+import {fetchDaily, fetchProjects, fetchAnalytics, fetchHourlyActivity, fetchQuota, fetchInsights, fetchFileActivity, fetchSessionDurations, fetchEfficiencyCoach, TimeRangeKey } from '../api/client.js';
 import type { ProviderStatusDTO, FileActivityDTO, SessionDurationDTO } from '../../shared/types.js';
 import { useCcusageData } from '../hooks/useCcusageData.js';
 import { useLocalStorageState } from '../hooks/useLocalStorageState.js';
@@ -15,6 +15,7 @@ import { AnalyticsSection } from './AnalyticsSection.js';
 import { HeatmapSection } from './HeatmapSection.js';
 import { InsightsSection } from './InsightsSection.js';
 import { AdditionalInsightsSection } from './AdditionalInsightsSection.js';
+import { EfficiencyCoachSection } from './EfficiencyCoachSection.js';
 import { useAdvancedInsights } from '../hooks/useAdvancedInsights.js';
 import type { DailyEntry, MetricMode } from '../../shared/types.js';
 
@@ -154,6 +155,7 @@ export function Dashboard() {
   // Fetch quota and insights
   const quotaData = useCcusageData(useCallback(() => fetchQuota(), []));
   const insightsData = useCcusageData(useCallback(() => fetchInsights(provider, timeRange), [provider, timeRange]));
+  const efficiencyCoachData = useCcusageData(useCallback(() => fetchEfficiencyCoach(provider, project, timeRange), [provider, project, timeRange]));
   const advancedInsights = useAdvancedInsights();
   
   useEffect(() => {
@@ -451,6 +453,14 @@ export function Dashboard() {
           </div>
         </div>
       )}
+
+      <div className="mb-6">
+        <EfficiencyCoachSection
+          data={efficiencyCoachData.data ?? null}
+          loading={efficiencyCoachData.loading}
+          error={efficiencyCoachData.error}
+        />
+      </div>
 
       {/* Quota Insights Row - shown only if quota is configured */}
       {quotaData.data && (

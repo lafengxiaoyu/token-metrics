@@ -327,3 +327,60 @@ export type SessionDurationDTO = {
     date: string
   }
 }
+
+export type EfficiencyCoachBand = 'high' | 'healthy' | 'watch' | 'low'
+
+export type EfficiencyCoachFinding = {
+  title: string
+  severity: 'low' | 'medium' | 'high'
+  detail: string
+  recommendation: string
+}
+
+export type EfficiencyScoreBreakdown = {
+  outcome: number
+  focus: number
+  reliability: number
+  cost: number
+  prompt: number
+}
+
+export type EfficiencySessionReview = {
+  sessionId: string
+  project: string
+  date: string
+  category: string
+  score: number
+  band: EfficiencyCoachBand
+  totalTokens: number
+  totalCost: number
+  durationMinutes: number
+  turns: number
+  editTurns: number
+  readCalls: number
+  bashCalls: number
+  retries: number
+  promptScore: number
+  reasons: string[]
+  recommendation: string
+}
+
+export type EfficiencyCategorySummary = {
+  category: string
+  sessions: number
+  avgScore: number
+  avgTokens: number
+  editRate: number
+  retryRate: number
+}
+
+export type EfficiencyCoachDTO = {
+  score: number
+  band: EfficiencyCoachBand
+  summary: string
+  breakdown: EfficiencyScoreBreakdown
+  findings: EfficiencyCoachFinding[]
+  lowEfficiencySessions: EfficiencySessionReview[]
+  highEfficiencySessions: EfficiencySessionReview[]
+  categories: EfficiencyCategorySummary[]
+}

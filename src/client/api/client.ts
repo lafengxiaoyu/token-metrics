@@ -21,6 +21,7 @@ import type {
   ToolEfficiencyDTO,
   FileActivityDTO,
   SessionDurationDTO,
+  EfficiencyCoachDTO,
 } from '../../shared/types';
 
 export interface HourlyActivityEntry {
@@ -233,4 +234,12 @@ export async function fetchSessionDurations(): Promise<{ data: SessionDurationDT
   const res = await fetch(BASE + '/insights/session-durations');
   if (!res.ok) throw new Error('Failed to fetch session durations: ' + res.status);
   return res.json();
+}
+
+export async function fetchEfficiencyCoach(provider = 'all', project?: string, range: TimeRangeKey = '30d'): Promise<EfficiencyCoachDTO> {
+  const { from, to } = timeRangeToDates(range);
+  const res = await fetch(BASE + '/efficiency-coach' + qs(provider, { project: project || undefined, from, to }));
+  if (!res.ok) throw new Error('Failed to fetch efficiency coach: ' + res.status);
+  const json = await res.json() as ApiResult<EfficiencyCoachDTO>;
+  return json.data;
 }

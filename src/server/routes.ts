@@ -11,6 +11,7 @@ import {
 } from '../usage/service.js';
 import {getAnalytics } from './analyticsService.js';
 import { getHourlyActivity } from './hourlyActivityService.js';
+import { getEfficiencyCoach } from './efficiencyCoachService.js';
 import { getPlanUsageOrNull } from '../plan-usage.js';
 import { analyzeSecurityAudit, analyzeReasoningDepth, analyzeConversationQuality, classifyQuestions, analyzeToolEfficiency, analyzeFileActivity, analyzeSessionDurations } from './insightsService.js';
 import { join } from 'path';
@@ -227,6 +228,29 @@ try {
         lastWeekCost: 0,
         prevWeekCost: 0,
       }, [{ code: 'INSIGHTS_ERROR', message: err instanceof Error ? err.message : String(err) }]));
+    }
+  });
+
+  app.get('/api/efficiency-coach', async (req: Request, res) => {
+    try {
+      const query = parseQueryParams(req.query as Record<string, unknown>);
+      const coach = await getEfficiencyCoach(query);
+      res.json(ok(coach));
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('Invalid')) {
+        res.status(400).json({ error: err.message });
+      } else {
+        res.status(500).json(withWarning({
+          score: 0,
+          band: 'watch',
+          summary: 'Efficiency coach analysis is temporarily unavailable.',
+          breakdown: { outcome: 0, focus: 0, reliability: 0, cost: 0, prompt: 0 },
+          findings: [],
+          lowEfficiencySessions: [],
+          highEfficiencySessions: [],
+          categories: [],
+        }, [{ code: 'EFFICIENCY_COACH_ERROR', message: err instanceof Error ? err.message : String(err) }]));
+      }
     }
   });
 
