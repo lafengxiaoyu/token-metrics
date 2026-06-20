@@ -10,6 +10,8 @@ export type Plan = {
   id: PlanId
   monthlyUsd: number
   monthlyCredits?: number
+  officialUsedCredits?: number
+  officialUsageUpdatedAt?: string
   provider: PlanProvider
   resetDay?: number
   setAt: string

@@ -5,7 +5,7 @@ import {
   ComposedChart, AreaChart, Area, PieChart, Pie,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import {fetchDaily, fetchProjects, fetchAnalytics, fetchHourlyActivity, fetchQuota, fetchInsights, fetchFileActivity, fetchSessionDurations, fetchEfficiencyCoach, updateCreditLimit, TimeRangeKey } from '../api/client.js';
+import {fetchDaily, fetchProjects, fetchAnalytics, fetchHourlyActivity, fetchQuota, fetchInsights, fetchFileActivity, fetchSessionDurations, fetchEfficiencyCoach, updateCreditSettings, TimeRangeKey } from '../api/client.js';
 import type { ProviderStatusDTO, FileActivityDTO, SessionDurationDTO } from '../../shared/types.js';
 import { useCcusageData } from '../hooks/useCcusageData.js';
 import { useLocalStorageState } from '../hooks/useLocalStorageState.js';
@@ -149,6 +149,7 @@ export function Dashboard() {
   const [metric, setMetric] = useLocalStorageState<MetricMode>('dashboard_metric', 'tokens');
   const [editingCreditLimit, setEditingCreditLimit] = useState(false);
   const [creditInput, setCreditInput] = useState('3000');
+  const [officialUsedInput, setOfficialUsedInput] = useState('');
   const [creditSaving, setCreditSaving] = useState(false);
   const [creditError, setCreditError] = useState<string | null>(null);
   
@@ -166,16 +167,18 @@ export function Dashboard() {
   useEffect(() => {
     if (quotaData.data && !editingCreditLimit) {
       setCreditInput(String(quotaData.data.creditLimit));
+      setOfficialUsedInput(quotaData.data.usageSource === 'official-manual' ? String(quotaData.data.spentCredits) : '');
     }
   }, [quotaData.data, editingCreditLimit]);
 
   async function saveCreditAllowance(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const monthlyCredits = Number(creditInput);
+    const officialUsedCredits = officialUsedInput.trim() === '' ? undefined : Number(officialUsedInput);
     setCreditSaving(true);
     setCreditError(null);
     try {
-      await updateCreditLimit(monthlyCredits);
+      await updateCreditSettings(monthlyCredits, officialUsedCredits);
       await quotaData.refetch();
       setEditingCreditLimit(false);
     } catch (err) {
@@ -385,19 +388,38 @@ export function Dashboard() {
               </p>
             </div>
             {editingCreditLimit ? (
-              <form onSubmit={saveCreditAllowance} className="flex w-full flex-col items-end gap-1.5 sm:w-auto">
+              <form onSubmit={saveCreditAllowance} className="flex w-full flex-col items-end gap-2 sm:w-auto">
+                <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
+                  <label className="flex flex-col gap-1 text-[11px] font-medium text-stone-500">
+                    Monthly allowance
+                    <input
+                      aria-label="Monthly AI credit allowance"
+                      type="number"
+                      min="1"
+                      max="10000000"
+                      step="1"
+                      value={creditInput}
+                      onChange={event => setCreditInput(event.target.value)}
+                      className="h-9 w-full rounded-md border border-stone-300 bg-white px-2.5 text-right font-mono text-sm font-semibold text-stone-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 sm:w-32"
+                      autoFocus
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-[11px] font-medium text-stone-500">
+                    Official credits used
+                    <input
+                      aria-label="Official AI credits used"
+                      type="number"
+                      min="0"
+                      max="10000000"
+                      step="1"
+                      placeholder="Use local estimate"
+                      value={officialUsedInput}
+                      onChange={event => setOfficialUsedInput(event.target.value)}
+                      className="h-9 w-full rounded-md border border-stone-300 bg-white px-2.5 text-right font-mono text-sm font-semibold text-stone-900 outline-none placeholder:text-[10px] placeholder:font-sans placeholder:font-normal focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 sm:w-40"
+                    />
+                  </label>
+                </div>
                 <div className="flex items-center gap-1.5">
-                  <input
-                    aria-label="Monthly AI credit allowance"
-                    type="number"
-                    min="1"
-                    max="10000000"
-                    step="1"
-                    value={creditInput}
-                    onChange={event => setCreditInput(event.target.value)}
-                    className="h-9 w-32 rounded-md border border-stone-300 bg-white px-2.5 text-right font-mono text-sm font-semibold text-stone-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
-                    autoFocus
-                  />
                   <button type="submit" disabled={creditSaving} title="Save allowance" aria-label="Save allowance" className="flex h-9 w-9 items-center justify-center rounded-md bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50">
                     <Check size={16} />
                   </button>
@@ -405,15 +427,17 @@ export function Dashboard() {
                     <X size={16} />
                   </button>
                 </div>
-                {creditError ? <p className="max-w-72 text-right text-[11px] text-red-600">{creditError}</p> : <p className="text-[11px] text-stone-500">credits per month</p>}
+                {creditError ? <p className="max-w-80 text-right text-[11px] text-red-600">{creditError}</p> : null}
               </form>
             ) : (
               <div className="flex items-center gap-2 text-right">
                 <div>
                   <div className="text-2xl font-bold text-stone-900">{formatCredits(quotaData.data.spentCredits)}</div>
-                  <div className="text-xs text-stone-500">of {formatCredits(quotaData.data.creditLimit)} credits</div>
+                  <div className="text-xs text-stone-500">
+                    of {formatCredits(quotaData.data.creditLimit)} credits · {quotaData.data.usageSource === 'official-manual' ? 'official usage' : 'local estimate'}
+                  </div>
                 </div>
-                <button type="button" title="Edit monthly allowance" aria-label="Edit monthly AI credit allowance" onClick={() => setEditingCreditLimit(true)} className="flex h-9 w-9 items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-100 hover:text-stone-800">
+                <button type="button" title="Edit credit settings" aria-label="Edit AI credit settings" onClick={() => setEditingCreditLimit(true)} className="flex h-9 w-9 items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-100 hover:text-stone-800">
                   <Pencil size={15} />
                 </button>
               </div>
@@ -424,7 +448,7 @@ export function Dashboard() {
           <div className="relative h-8 bg-white/60 rounded-full overflow-hidden mb-3">
             <div 
               className={`h-full transition-all duration-500 flex items-center justify-center ${
-                quotaData.data.status === 'over' ? 'bg-red-500' : 
+                quotaData.data.status === 'over' || quotaData.data.status === 'exhausted' ? 'bg-red-500' :
                 quotaData.data.status === 'near' ? 'bg-amber-500' : 
                 'bg-emerald-600'
               }`}
@@ -437,7 +461,7 @@ export function Dashboard() {
             {quotaData.data.percentUsed <= 10 && (
               <div className="absolute inset-0 flex items-center justify-center">
                 <span className={`text-xs font-bold ${
-                  quotaData.data.status === 'over' ? 'text-red-600' : 
+                  quotaData.data.status === 'over' || quotaData.data.status === 'exhausted' ? 'text-red-600' :
                   quotaData.data.status === 'near' ? 'text-amber-600' : 
                   'text-emerald-700'
                 }`}>{quotaData.data.percentUsed.toFixed(1)}%</span>
@@ -447,12 +471,12 @@ export function Dashboard() {
           
           <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-3">
             <div>
-              <div className="text-stone-500 mb-0.5">Used locally</div>
+              <div className="text-stone-500 mb-0.5">{quotaData.data.usageSource === 'official-manual' ? 'Official usage' : 'Local CLI estimate'}</div>
               <div className="text-stone-900 font-semibold">{formatCredits(quotaData.data.spentCredits)} credits</div>
             </div>
             <div>
-              <div className="text-stone-500 mb-0.5">Projected</div>
-              <div className="text-stone-900 font-semibold">{formatCredits(quotaData.data.projectedCredits)} credits</div>
+              <div className="text-stone-500 mb-0.5">Local CLI estimate</div>
+              <div className="text-stone-900 font-semibold">{formatCredits(quotaData.data.localEstimatedCredits)} credits</div>
             </div>
             <div>
               <div className="text-stone-500 mb-0.5">Estimated API value</div>
@@ -460,7 +484,9 @@ export function Dashboard() {
             </div>
           </div>
           <p className="mt-3 border-t border-stone-100 pt-3 text-[11px] leading-relaxed text-stone-500">
-            Local estimate from Copilot CLI token logs. Your company's official shared-pool balance may also include usage from other Copilot surfaces and users.
+            {quotaData.data.usageSource === 'official-manual'
+              ? `Official usage was entered manually${quotaData.data.officialUsageUpdatedAt ? ` on ${new Date(quotaData.data.officialUsageUpdatedAt).toLocaleDateString()}` : ''}. Local CLI usage remains an estimate for comparison.`
+              : `Showing a local estimate from Copilot CLI logs. Enter GitHub's official usage above when the company shared-pool balance differs.`}
           </p>
         </div>
       )}
@@ -476,7 +502,7 @@ export function Dashboard() {
           <KPICard 
             label="Credit usage"
             value={`${quotaData.data.percentUsed.toFixed(0)}%`}
-            insight={`${quotaData.data.status === 'over' ? 'Over allowance' : quotaData.data.status === 'near' ? 'Near allowance' : 'On track'} - ${formatCredits(quotaData.data.spentCredits)} / ${formatCredits(quotaData.data.creditLimit)} credits`}
+            insight={`${quotaData.data.status === 'over' ? 'Over allowance' : quotaData.data.status === 'exhausted' ? 'Allowance exhausted' : quotaData.data.status === 'near' ? 'Near allowance' : 'On track'} - ${formatCredits(quotaData.data.spentCredits)} / ${formatCredits(quotaData.data.creditLimit)} credits (${quotaData.data.usageSource === 'official-manual' ? 'official' : 'local estimate'})`}
           />
         ) : insightsData.data ? (
           <KPICard 
@@ -535,7 +561,7 @@ export function Dashboard() {
             <div className="text-xs text-sky-700 mt-1">credits/day to stay within allowance</div>
           </div>
           <div className="p-4 bg-stone-100 rounded-lg border border-stone-200/70 shadow-sm">
-            <div className="text-xs font-semibold text-stone-600 uppercase tracking-wider mb-1">Projected variance</div>
+            <div className="text-xs font-semibold text-stone-600 uppercase tracking-wider mb-1">{quotaData.data.usageSource === 'official-manual' ? 'Current variance' : 'Projected variance'}</div>
             <div className={`text-2xl font-bold ${
               quotaData.data.projectedCredits > quotaData.data.creditLimit ? 'text-red-900' : 'text-emerald-900'
             }`}>

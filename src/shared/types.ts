@@ -180,6 +180,8 @@ export interface QuotaUsage {
     id: string;
     monthlyUsd: number;
     monthlyCredits?: number;
+    officialUsedCredits?: number;
+    officialUsageUpdatedAt?: string;
     provider: string;
     resetDay?: number;
   };
@@ -187,16 +189,19 @@ export interface QuotaUsage {
   periodEnd: string;
   spentApiEquivalentUsd: number;
   budgetUsd: number;
+  localEstimatedCredits: number;
   spentCredits: number;
   creditLimit: number;
   remainingCredits: number;
   percentUsed: number;
-  status: 'under' | 'near' | 'over';
+  status: 'under' | 'near' | 'exhausted' | 'over';
   projectedMonthUsd: number;
   projectedCredits: number;
   dailyCreditBudget: number;
   projectedOverageUsd: number;
   daysUntilReset: number;
+  usageSource: 'local-estimate' | 'official-manual';
+  officialUsageUpdatedAt?: string;
   isEstimate: boolean;
 }
 

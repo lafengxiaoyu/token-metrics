@@ -181,11 +181,11 @@ export async function fetchQuota(): Promise<QuotaUsage | null> {
   return json.data;
 }
 
-export async function updateCreditLimit(monthlyCredits: number): Promise<QuotaUsage> {
+export async function updateCreditSettings(monthlyCredits: number, officialUsedCredits?: number): Promise<QuotaUsage> {
   const res = await fetch(BASE + '/quota', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ monthlyCredits }),
+    body: JSON.stringify({ monthlyCredits, officialUsedCredits }),
   });
   const json = await res.json() as ApiResult<QuotaUsage> | { error?: string };
   if (!res.ok) {

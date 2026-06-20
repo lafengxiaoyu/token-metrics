@@ -190,6 +190,7 @@ tokenlens --version               # Show version
 
 - Tracks the current company allowance of 3,000 AI credits per month by default
 - Lets users change the monthly allowance directly from the dashboard and saves it locally
+- Separates the local CLI estimate from manually entered official GitHub usage, using official usage for the main allowance percentage when available
 - Converts estimated API-equivalent cost at GitHub's fixed rate of 1 AI credit = $0.01 USD
 - Shows credits used, remaining, daily pacing, and projected month-end usage
 - Uses local Copilot CLI logs, so the result is an estimate and does not include other users or Copilot surfaces in the company pool

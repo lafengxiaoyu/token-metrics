@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { DEFAULT_COPILOT_CREDIT_PLAN, getPlanUsageFromProjects, normalizeCreditLimit } from '../plan-usage.js'
+import { DEFAULT_COPILOT_CREDIT_PLAN, getPlanUsageFromProjects, normalizeCreditLimit, normalizeOfficialUsedCredits } from '../plan-usage.js'
 import type { ProjectSummary } from '../types.js'
 
 function projectWithCost(costUSD: number, timestamp = '2026-06-20T10:00:00.000Z'): ProjectSummary {
@@ -71,6 +71,12 @@ describe('Copilot AI credit usage', () => {
     expect(() => normalizeCreditLimit(12.5)).toThrow('whole number')
   })
 
+  it('validates optional official usage', () => {
+    expect(normalizeOfficialUsedCredits('3000')).toBe(3000)
+    expect(normalizeOfficialUsedCredits('')).toBeUndefined()
+    expect(() => normalizeOfficialUsedCredits(-1)).toThrow('between 0 and 10,000,000')
+  })
+
   it('converts API-equivalent cost to AI credits against the 3,000 credit allowance', () => {
     const usage = getPlanUsageFromProjects(
       DEFAULT_COPILOT_CREDIT_PLAN,
@@ -96,5 +102,24 @@ describe('Copilot AI credit usage', () => {
     expect(usage.spentCredits).toBe(3500)
     expect(usage.remainingCredits).toBe(0)
     expect(usage.projectedOverageUsd).toBeGreaterThanOrEqual(5)
+  })
+
+  it('uses manually entered official usage for the allowance percentage', () => {
+    const usage = getPlanUsageFromProjects(
+      {
+        ...DEFAULT_COPILOT_CREDIT_PLAN,
+        officialUsedCredits: 3000,
+        officialUsageUpdatedAt: '2026-06-20T12:00:00.000Z',
+      },
+      [projectWithCost(8.1)],
+      new Date(2026, 5, 20, 12),
+    )
+
+    expect(usage.localEstimatedCredits).toBe(810)
+    expect(usage.spentCredits).toBe(3000)
+    expect(usage.percentUsed).toBe(100)
+    expect(usage.status).toBe('exhausted')
+    expect(usage.usageSource).toBe('official-manual')
+    expect(usage.isEstimate).toBe(false)
   })
 })

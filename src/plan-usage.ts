@@ -20,13 +20,25 @@ export function normalizeCreditLimit(value: unknown): number {
   return credits
 }
 
-export async function saveCopilotCreditLimit(value: unknown): Promise<Plan> {
-  const monthlyCredits = normalizeCreditLimit(value)
+export function normalizeOfficialUsedCredits(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined
+  const credits = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(credits) || !Number.isInteger(credits) || credits < 0 || credits > 10_000_000) {
+    throw new Error('Official credits used must be a whole number between 0 and 10,000,000')
+  }
+  return credits
+}
+
+export async function saveCopilotCreditSettings(monthlyValue: unknown, officialUsedValue: unknown): Promise<Plan> {
+  const monthlyCredits = normalizeCreditLimit(monthlyValue)
+  const officialUsedCredits = normalizeOfficialUsedCredits(officialUsedValue)
   const current = await readPlan()
   const plan: Plan = {
     id: 'custom',
     monthlyCredits,
     monthlyUsd: monthlyCredits / AI_CREDITS_PER_USD,
+    officialUsedCredits,
+    officialUsageUpdatedAt: officialUsedCredits === undefined ? undefined : new Date().toISOString(),
     provider: 'copilot',
     resetDay: current?.resetDay ?? 1,
     setAt: new Date().toISOString(),
@@ -35,7 +47,7 @@ export async function saveCopilotCreditLimit(value: unknown): Promise<Plan> {
   return plan
 }
 
-export type PlanStatus = 'under' | 'near' | 'over'
+export type PlanStatus = 'under' | 'near' | 'exhausted' | 'over'
 
 export type PlanUsage = {
   plan: Plan
@@ -43,6 +55,7 @@ export type PlanUsage = {
   periodEnd: Date
   spentApiEquivalentUsd: number
   budgetUsd: number
+  localEstimatedCredits: number
   spentCredits: number
   creditLimit: number
   remainingCredits: number
@@ -53,7 +66,9 @@ export type PlanUsage = {
   dailyCreditBudget: number
   projectedOverageUsd: number
   daysUntilReset: number
-  isEstimate: true
+  usageSource: 'local-estimate' | 'official-manual'
+  officialUsageUpdatedAt?: string
+  isEstimate: boolean
 }
 
 export function clampResetDay(resetDay: number | undefined): number {
@@ -144,14 +159,21 @@ export function projectMonthEnd(
 export function getPlanUsageFromProjects(plan: Plan, projects: ProjectSummary[], today = new Date()): PlanUsage {
   const { periodStart, periodEnd } = computePeriodFromResetDay(plan.resetDay, today)
   const spent = projects.reduce((sum, p) => sum + p.totalCostUSD, 0)
-  const spentCredits = spent * AI_CREDITS_PER_USD
+  const localEstimatedCredits = spent * AI_CREDITS_PER_USD
+  const usageSource = plan.officialUsedCredits === undefined ? 'local-estimate' : 'official-manual'
+  const spentCredits = plan.officialUsedCredits ?? localEstimatedCredits
   const creditLimit = plan.monthlyCredits ?? plan.monthlyUsd * AI_CREDITS_PER_USD
   const budgetUsd = creditLimit / AI_CREDITS_PER_USD
   const remainingCredits = Math.max(0, creditLimit - spentCredits)
   const percentUsed = creditLimit > 0 ? (spentCredits / creditLimit) * 100 : 0
-  const status: PlanStatus = percentUsed > 100 ? 'over' : percentUsed >= PLAN_NEAR_THRESHOLD_PCT ? 'near' : 'under'
+  const status: PlanStatus = percentUsed > 100
+    ? 'over'
+    : percentUsed >= 100
+      ? 'exhausted'
+      : percentUsed >= PLAN_NEAR_THRESHOLD_PCT ? 'near' : 'under'
   const projectedMonthUsd = projectMonthEnd(projects, periodStart, periodEnd, today, spent)
-  const projectedCredits = projectedMonthUsd * AI_CREDITS_PER_USD
+  const localProjectedCredits = projectedMonthUsd * AI_CREDITS_PER_USD
+  const projectedCredits = usageSource === 'official-manual' ? spentCredits : localProjectedCredits
   const daysUntilReset = Math.max(0, diffCalendarDays(today, periodEnd))
   const dailyCreditBudget = daysUntilReset > 0 ? remainingCredits / daysUntilReset : 0
   const projectedOverageUsd = Math.max(0, projectedCredits - creditLimit) / AI_CREDITS_PER_USD
@@ -162,6 +184,7 @@ export function getPlanUsageFromProjects(plan: Plan, projects: ProjectSummary[],
     periodEnd,
     spentApiEquivalentUsd: spent,
     budgetUsd,
+    localEstimatedCredits,
     spentCredits,
     creditLimit,
     remainingCredits,
@@ -172,7 +195,9 @@ export function getPlanUsageFromProjects(plan: Plan, projects: ProjectSummary[],
     dailyCreditBudget,
     projectedOverageUsd,
     daysUntilReset,
-    isEstimate: true,
+    usageSource,
+    officialUsageUpdatedAt: plan.officialUsageUpdatedAt,
+    isEstimate: usageSource === 'local-estimate',
   }
 }
 
