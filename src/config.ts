@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir, rename } from 'fs/promises'
 import { join } from 'path'
-import { homedir } from 'os'
 import { randomBytes } from 'crypto'
+import { resolveExistingConfigDir } from './platform-paths.js'
 
 export type PlanId = 'copilot-business' | 'claude-pro' | 'claude-max' | 'claude-max-5x' | 'cursor-pro' | 'custom' | 'none'
 export type PlanProvider = 'copilot' | 'claude' | 'codex' | 'cursor' | 'all'
@@ -27,7 +27,7 @@ export type CodeburnConfig = {
 }
 
 function getConfigDir(): string {
-  return join(homedir(), '.config', 'codeburn')
+  return resolveExistingConfigDir()
 }
 
 function getConfigPath(): string {

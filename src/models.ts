@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
-import { homedir } from 'os'
 import snapshotData from './data/litellm-snapshot.json' with { type: "json" }
+import { resolveTokenLensCacheDir } from './platform-paths.js'
 
 export type ModelCosts = {
   inputCostPerToken: number
@@ -58,7 +58,7 @@ function getSortedPricingKeys(): string[] {
 }
 
 function getCacheDir(): string {
-    return join(homedir(), '.cache', 'tokenlens')
+    return resolveTokenLensCacheDir()
 }
 
 function getCachePath(): string {

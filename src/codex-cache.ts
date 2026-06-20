@@ -2,7 +2,7 @@ import { readFile, mkdir, stat, open, rename, unlink } from 'fs/promises'
 import { existsSync } from 'fs'
 import { randomBytes } from 'crypto'
 import { join } from 'path'
-import { homedir } from 'os'
+import { resolveTokenLensCacheDir } from './platform-paths.js'
 
 import type { ParsedProviderCall } from './providers/types.js'
 
@@ -24,7 +24,7 @@ type ResultCache = {
 }
 
 function getCacheDir(): string {
-    return process.env['TOKENLENS_CACHE_DIR'] ?? join(homedir(), '.cache', 'tokenlens')
+    return resolveTokenLensCacheDir()
 }
 
 function getCachePath(): string {

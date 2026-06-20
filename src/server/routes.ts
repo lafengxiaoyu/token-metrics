@@ -15,8 +15,8 @@ import { getEfficiencyCoach } from './efficiencyCoachService.js';
 import { getPlanUsage, getPlanUsageOrNull, saveCopilotCreditSettings } from '../plan-usage.js';
 import { analyzeSecurityAudit, analyzeReasoningDepth, analyzeConversationQuality, classifyQuestions, analyzeToolEfficiency, analyzeFileActivity, analyzeSessionDurations } from './insightsService.js';
 import { join } from 'path';
-import { homedir } from 'os';
 import { readdir } from 'fs/promises';
+import { resolveCopilotHome } from '../platform-paths.js';
 
 function ok<T>(data: T, cached = false): ApiResult<T> {
   return {
@@ -290,7 +290,7 @@ try {
   // Advanced Insights endpoints
   app.get('/api/insights/security', async (_req, res) => {
     try {
-      const sessionDir = join(homedir(), '.copilot', 'session-state');
+      const sessionDir = join(resolveCopilotHome(), 'session-state');
       const sessions = await readdir(sessionDir);
       const sessionPaths = sessions.map(s => join(sessionDir, s));
       
@@ -311,7 +311,7 @@ try {
 
   app.get('/api/insights/reasoning', async (_req, res) => {
     try {
-      const sessionDir = join(homedir(), '.copilot', 'session-state');
+      const sessionDir = join(resolveCopilotHome(), 'session-state');
       const sessions = await readdir(sessionDir);
       const sessionPaths = sessions.map(s => join(sessionDir, s));
       
@@ -331,7 +331,7 @@ try {
 
   app.get('/api/insights/conversation', async (_req, res) => {
     try {
-      const sessionDir = join(homedir(), '.copilot', 'session-state');
+      const sessionDir = join(resolveCopilotHome(), 'session-state');
       const sessions = await readdir(sessionDir);
       const sessionPaths = sessions.map(s => join(sessionDir, s));
       
@@ -351,7 +351,7 @@ try {
 
   app.get('/api/insights/classification', async (_req, res) => {
     try {
-      const sessionDir = join(homedir(), '.copilot', 'session-state');
+      const sessionDir = join(resolveCopilotHome(), 'session-state');
       const sessions = await readdir(sessionDir);
       const sessionPaths = sessions.map(s => join(sessionDir, s));
       
@@ -374,7 +374,7 @@ try {
 
   app.get('/api/insights/efficiency', async (_req, res) => {
     try {
-      const sessionDir = join(homedir(), '.copilot', 'session-state');
+      const sessionDir = join(resolveCopilotHome(), 'session-state');
       const sessions = await readdir(sessionDir);
       const sessionPaths = sessions.map(s => join(sessionDir, s));
       
@@ -392,7 +392,7 @@ try {
 
   app.get('/api/insights/file-activity', async (_req, res) => {
     try {
-      const sessionDir = join(homedir(), '.copilot', 'session-state');
+      const sessionDir = join(resolveCopilotHome(), 'session-state');
       const sessions = await readdir(sessionDir);
       const sessionPaths = sessions.map(s => join(sessionDir, s));
       
@@ -412,7 +412,7 @@ try {
 
   app.get('/api/insights/session-durations', async (_req, res) => {
     try {
-      const sessionDir = join(homedir(), '.copilot', 'session-state');
+      const sessionDir = join(resolveCopilotHome(), 'session-state');
       const sessions = await readdir(sessionDir);
       const sessionPaths = sessions.map(s => join(sessionDir, s));
       

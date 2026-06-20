@@ -1,8 +1,6 @@
 import { readFile, writeFile, mkdir, rename } from 'fs/promises';
 import { join } from 'path';
-import{ homedir } from 'os';
-
-export const CACHE_DIR = process.env.TOKENLENS_CACHE_DIR ?? join(homedir(), '.cache', 'tokenlens');
+import { resolveTokenLensCacheDir } from '../platform-paths.js';
 
 interface CachePayload<T> {
   version: number;
@@ -12,7 +10,7 @@ interface CachePayload<T> {
 
 export async function readJsonCache<T>(name: string, version: number): Promise<T | null> {
   try {
-    const filePath = join(CACHE_DIR, `${name}.json`);
+    const filePath = join(resolveTokenLensCacheDir(), `${name}.json`);
     const content = await readFile(filePath, 'utf-8');
     const payload = JSON.parse(content) as CachePayload<T>;
 
@@ -27,7 +25,8 @@ export async function readJsonCache<T>(name: string, version: number): Promise<T
 }
 
 export async function writeJsonCache<T>(name: string, version: number, data: T): Promise<void> {
-  await mkdir(CACHE_DIR, { recursive: true });
+  const cacheDir = resolveTokenLensCacheDir();
+  await mkdir(cacheDir, { recursive: true });
 
   const payload: CachePayload<T> = {
     version,
@@ -35,8 +34,8 @@ export async function writeJsonCache<T>(name: string, version: number, data: T):
     data,
   };
 
-  const filePath = join(CACHE_DIR, `${name}.json`);
-  const tmpPath = join(CACHE_DIR, `${name}.tmp`);
+  const filePath = join(cacheDir, `${name}.json`);
+  const tmpPath = join(cacheDir, `${name}.tmp`);
 
   await writeFile(tmpPath, JSON.stringify(payload), 'utf-8');
   await rename(tmpPath, filePath);

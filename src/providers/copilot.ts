@@ -5,6 +5,7 @@ import { homedir } from 'os'
 
 import { readSessionFile } from '../fs-utils.js'
 import { calculateCost } from '../models.js'
+import { resolveCopilotHome } from '../platform-paths.js'
 import type { Provider, SessionSource, SessionParser, ParsedProviderCall } from './types.js'
 
 const modelDisplayNames: Record<string, string> = {
@@ -305,7 +306,7 @@ function createParser(source: SessionSource, seenKeys: Set<string>): SessionPars
 // --- Discovery ---
 
 function getCopilotSessionStateDir(override?: string): string {
-  return override ?? join(homedir(), '.copilot', 'session-state')
+  return override ?? join(resolveCopilotHome(), 'session-state')
 }
 
 function getVSCodeWorkspaceStorageDirs(): string[] {

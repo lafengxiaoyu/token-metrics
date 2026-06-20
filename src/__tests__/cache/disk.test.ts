@@ -1,14 +1,22 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readJsonCache, writeJsonCache } from '../../cache/disk.js';
 import { join } from 'path';
 import { mkdir, rm } from 'fs/promises';
+import { tmpdir } from 'os';
 
 describe('disk cache', () => {
-  const testDir = join('/tmp', `tokenlens-test-${Date.now()}`);
+  const testDir = join(tmpdir(), `tokenlens-test-${Date.now()}`);
+  const originalCacheDir = process.env.TOKENLENS_CACHE_DIR;
 
-  beforeEach(async () => {
-await mkdir(testDir, { recursive: true });
+  beforeAll(async () => {
+    await mkdir(testDir, { recursive: true });
     process.env.TOKENLENS_CACHE_DIR = testDir;
+  });
+
+  afterAll(async () => {
+    if (originalCacheDir === undefined) delete process.env.TOKENLENS_CACHE_DIR;
+    else process.env.TOKENLENS_CACHE_DIR = originalCacheDir;
+    await rm(testDir, { recursive: true, force: true });
   });
 
   it('missing cache returns null', async () => {

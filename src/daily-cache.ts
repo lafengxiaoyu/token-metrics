@@ -1,9 +1,9 @@
 import { randomBytes } from 'crypto'
 import { existsSync } from 'fs'
 import { mkdir, open, readFile, rename, unlink } from 'fs/promises'
-import { homedir } from 'os'
 import { join } from 'path'
 import type { DateRange, ProjectSummary } from './types.js'
+import { resolveTokenLensCacheDir } from './platform-paths.js'
 
 export const DAILY_CACHE_VERSION = 4
 const MIN_SUPPORTED_VERSION = 2
@@ -39,7 +39,7 @@ export type DailyCache = {
 }
 
 function getCacheDir(): string {
-    return process.env['TOKENLENS_CACHE_DIR'] ?? join(homedir(), '.cache', 'tokenlens')
+    return resolveTokenLensCacheDir()
 }
 
 function getCachePath(): string {

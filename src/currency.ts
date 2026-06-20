@@ -1,8 +1,8 @@
 import { readFile, writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
-import { homedir } from 'os'
 
 import { readConfig } from './config.js'
+import { resolveTokenLensCacheDir } from './platform-paths.js'
 
 type CurrencyState = {
   code: string
@@ -55,7 +55,7 @@ function getFractionDigits(code: string): number {
 }
 
 function getCacheDir(): string {
-  return join(homedir(), '.cache', 'codeburn')
+  return resolveTokenLensCacheDir()
 }
 
 function getRateCachePath(): string {

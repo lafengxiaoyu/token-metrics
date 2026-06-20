@@ -2,7 +2,7 @@
 
 > **Note**: This is an extended version based on [TokenLens](https://github.com/mikeymiaoxyz/tokenlens) by mikeymiaoxyz. See [ATTRIBUTION.md](ATTRIBUTION.md) for details.
 
-**TokenLens Extended** is a specialized dashboard for **GitHub Copilot CLI** that monitors token usage, analyzes AI reasoning patterns, and provides advanced insights into your coding sessions. All data stays local — no external telemetry or cloud dependencies.
+**TokenLens Extended** is a specialized dashboard for **GitHub Copilot CLI** that monitors token usage, analyzes AI reasoning patterns, and provides advanced insights into your coding sessions. All data stays local — no external telemetry or cloud dependencies. macOS, Windows, and Linux are supported.
 
 ## ✨ What's New in Extended Version
 
@@ -23,7 +23,7 @@ Plus all the original features from TokenLens!
 ### GitHub Copilot Focus
 
 This version is optimized exclusively for **GitHub Copilot CLI** users:
-- Parses session data from `~/.copilot/session-state/`
+- Parses session data from `$COPILOT_HOME/session-state/` (defaults to `~/.copilot/session-state/`)
 - Tracks Copilot-specific models (Claude Sonnet 4.5, Haiku 4.5, Opus 4.5, GPT-4.1)
 - Analyzes tool usage patterns specific to Copilot workflows
 
@@ -109,7 +109,7 @@ TokenLens goes beyond basic metrics with **8 intelligent analytics features**:
 
 - All data processed and stored locally on your machine
 - Session files are parsed directly from provider directories (e.g., `~/.claude/projects/`)
-- Disk caching in `~/.cache/tokenlens/` for fast subsequent loads
+- Uses platform-aware cache directories with `TOKENLENS_CACHE_DIR` and XDG overrides
 - No external services, no telemetry, no account required
 
 ---
@@ -118,6 +118,13 @@ TokenLens goes beyond basic metrics with **8 intelligent analytics features**:
 
 - **Node.js >= 22**
 - **npm** or **pnpm**
+
+### Supported Platforms
+
+- macOS
+- Windows (PowerShell or Windows Terminal)
+- Linux, including remote VS Code environments
+- Custom Copilot homes through the standard `COPILOT_HOME` environment variable
 
 ---
 
@@ -191,6 +198,7 @@ tokenlens --version               # Show version
 - Tracks the current company allowance of 3,000 AI credits per month by default
 - Lets users change the monthly allowance directly from the dashboard and saves it locally
 - Separates the local CLI estimate from manually entered official GitHub usage, using official usage for the main allowance percentage when available
+- Treats local trace-derived credits as incomplete diagnostic data rather than an authoritative company balance
 - Converts estimated API-equivalent cost at GitHub's fixed rate of 1 AI credit = $0.01 USD
 - Shows credits used, remaining, daily pacing, and projected month-end usage
 - Uses local Copilot CLI logs, so the result is an estimate and does not include other users or Copilot surfaces in the company pool
@@ -272,8 +280,8 @@ Provider Session Files → Parser → Aggregator → Service Layer → API → D
 ### Session Discovery
 
 TokenLens automatically discovers Copilot CLI sessions from:
-- `~/.copilot/session-state/*/events.jsonl` — Event logs with token usage
-- `~/.copilot/session-state/*/workspace-artifacts/` — Checkpoints and context files
+- `$COPILOT_HOME/session-state/*/events.jsonl` — Event logs with token usage
+- `$COPILOT_HOME/session-state/*/workspace-artifacts/` — Checkpoints and context files
 
 ### Data Processing
 
@@ -341,7 +349,13 @@ src/
 
 ### AI Credit Allowance (Optional)
 
-The dashboard defaults to the current 3,000-credit company allowance. To override it, create `~/.config/codeburn/config.json`:
+The dashboard defaults to the current 3,000-credit company allowance. The allowance and official usage can be changed directly in the dashboard. Configuration is stored in:
+
+- macOS/Linux: `~/.config/tokenlens/config.json` (or `$XDG_CONFIG_HOME/tokenlens/config.json`)
+- Windows: `%APPDATA%\tokenlens\config.json`
+- Custom: `$TOKENLENS_CONFIG_DIR/config.json`
+
+Existing `~/.config/codeburn/config.json` files are detected automatically. A configuration file can also be created manually:
 
 ```json
 {
@@ -365,7 +379,7 @@ The dashboard will show:
 ### Session Data
 
 TokenLens automatically reads from:
-- **Events**: `~/.copilot/session-state/<session-id>/events.jsonl`
+- **Events**: `$COPILOT_HOME/session-state/<session-id>/events.jsonl`
 - **Pricing**: `src/data/litellm-snapshot.json` (bundled)
 
 No additional configuration needed!
