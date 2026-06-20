@@ -1,5 +1,5 @@
 import type { EfficiencyCoachDTO, EfficiencySessionReview } from '../../shared/types.js';
-import { formatTokens, formatUSD } from '../utils/formatters.js';
+import { formatCredits, formatTokens } from '../utils/formatters.js';
 
 const bandStyles = {
   high: 'bg-emerald-50 text-emerald-700 border-emerald-100',
@@ -68,7 +68,7 @@ function SessionRow({ session, showRecommendation }: { session: EfficiencySessio
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] font-semibold text-stone-500 sm:grid-cols-5">
           <span>{formatTokens(session.totalTokens)}</span>
-          <span>{formatUSD(session.totalCost)}</span>
+          <span>{formatCredits(session.totalCost * 100)} credits</span>
           <span>{session.durationMinutes} min</span>
           <span>{session.editTurns}/{session.turns} edit turns</span>
           <span>{session.retries} retries</span>
@@ -177,7 +177,7 @@ export function EfficiencyCoachSection({ data, loading, error }: { data: Efficie
           <BreakdownBar label="Outcome" value={data.breakdown.outcome} />
           <BreakdownBar label="Focus" value={data.breakdown.focus} />
           <BreakdownBar label="Reliability" value={data.breakdown.reliability} />
-          <BreakdownBar label="Cost Fit" value={data.breakdown.cost} />
+          <BreakdownBar label="Credit Fit" value={data.breakdown.cost} />
           <BreakdownBar label="Prompt Clarity" value={data.breakdown.prompt} />
         </div>
 
@@ -204,7 +204,7 @@ export function EfficiencyCoachSection({ data, loading, error }: { data: Efficie
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <MiniStat label="Sessions" value={data.weeklyReview.sessions} />
         <MiniStat label="Tokens" value={formatTokens(data.weeklyReview.totalTokens)} />
-        <MiniStat label="Cost" value={formatUSD(data.weeklyReview.totalCost)} />
+        <MiniStat label="AI Credits" value={formatCredits(data.weeklyReview.totalCost * 100)} />
         <MiniStat label="Top task" value={data.weeklyReview.topTaskType} />
         <MiniStat label="Best day" value={data.weeklyReview.bestDay ?? 'N/A'} />
       </div>

@@ -1,14 +1,15 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, type FormEvent } from 'react';
+import { Check, Pencil, X } from 'lucide-react';
 import {
   BarChart, Bar, Cell, LineChart, Line,
   ComposedChart, AreaChart, Area, PieChart, Pie,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import {fetchDaily, fetchProjects, fetchAnalytics, fetchHourlyActivity, fetchQuota, fetchInsights, fetchFileActivity, fetchSessionDurations, fetchEfficiencyCoach, TimeRangeKey } from '../api/client.js';
+import {fetchDaily, fetchProjects, fetchAnalytics, fetchHourlyActivity, fetchQuota, fetchInsights, fetchFileActivity, fetchSessionDurations, fetchEfficiencyCoach, updateCreditLimit, TimeRangeKey } from '../api/client.js';
 import type { ProviderStatusDTO, FileActivityDTO, SessionDurationDTO } from '../../shared/types.js';
 import { useCcusageData } from '../hooks/useCcusageData.js';
 import { useLocalStorageState } from '../hooks/useLocalStorageState.js';
-import { formatDate, formatTokens, formatUSD, formatPercent, formatProjectName } from '../utils/formatters.js';
+import { formatCredits, formatDate, formatTokens, formatUSD, formatPercent, formatProjectName } from '../utils/formatters.js';
 import { shortModelName } from '../utils/modelNames.js';
 import { isSyntheticModel }from '../utils/syntheticModelFilter.js';
 import { AnalyticsSection } from './AnalyticsSection.js';
@@ -146,6 +147,10 @@ export function Dashboard() {
   const [project, setProject] = useLocalStorageState('dashboard_project', '');
   const [showPricing, setShowPricing] = useState(false);
   const [metric, setMetric] = useLocalStorageState<MetricMode>('dashboard_metric', 'tokens');
+  const [editingCreditLimit, setEditingCreditLimit] = useState(false);
+  const [creditInput, setCreditInput] = useState('3000');
+  const [creditSaving, setCreditSaving] = useState(false);
+  const [creditError, setCreditError] = useState<string | null>(null);
   
   // Additional insights state
   const [fileActivity, setFileActivity] = useState<FileActivityDTO | null>(null);
@@ -157,6 +162,28 @@ export function Dashboard() {
   const insightsData = useCcusageData(useCallback(() => fetchInsights(provider, timeRange), [provider, timeRange]));
   const efficiencyCoachData = useCcusageData(useCallback(() => fetchEfficiencyCoach(provider, project, timeRange), [provider, project, timeRange]));
   const advancedInsights = useAdvancedInsights();
+
+  useEffect(() => {
+    if (quotaData.data && !editingCreditLimit) {
+      setCreditInput(String(quotaData.data.creditLimit));
+    }
+  }, [quotaData.data, editingCreditLimit]);
+
+  async function saveCreditAllowance(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const monthlyCredits = Number(creditInput);
+    setCreditSaving(true);
+    setCreditError(null);
+    try {
+      await updateCreditLimit(monthlyCredits);
+      await quotaData.refetch();
+      setEditingCreditLimit(false);
+    } catch (err) {
+      setCreditError(err instanceof Error ? err.message : 'Failed to update credit allowance');
+    } finally {
+      setCreditSaving(false);
+    }
+  }
   
   useEffect(() => {
     async function fetchAdditional() {
@@ -194,7 +221,8 @@ export function Dashboard() {
   const coreLoading = dailyData.loading && !dailyData.data;
   const coreError = dailyData.error && !dailyData.data;
   const isTokens = metric === 'tokens';
-  const dataKey = isTokens ? 'tokens' : 'cost';
+  const selectedMetric: MetricMode = isTokens ? 'tokens' : 'credits';
+  const dataKey = isTokens ? 'tokens' : 'credits';
   const isToday = timeRange === 'today';
 
   const projectList = useMemo(() => {
@@ -228,7 +256,7 @@ export function Dashboard() {
 
   // Model aggregation from daily data
   const modelAgg = useMemo(() => {
-    const modelMap = new Map<string, { name: string; tokens: number; cost: number; inputTokens: number; outputTokens: number }>();
+    const modelMap = new Map<string, { name: string; tokens: number; credits: number; inputTokens: number; outputTokens: number }>();
     for (const day of filteredDaily) {
       for (const breakdown of (day.modelBreakdowns || [])) {
         if (isSyntheticModel(breakdown.modelName)) continue;
@@ -237,14 +265,14 @@ export function Dashboard() {
           existing.inputTokens += breakdown.inputTokens;
           existing.outputTokens += breakdown.outputTokens;
           existing.tokens += breakdown.inputTokens + breakdown.outputTokens;
-          existing.cost += breakdown.cost;
+          existing.credits += breakdown.cost * 100;
         } else {
           modelMap.set(breakdown.modelName, {
             name: breakdown.modelName,
             inputTokens: breakdown.inputTokens,
             outputTokens: breakdown.outputTokens,
             tokens: breakdown.inputTokens + breakdown.outputTokens,
-            cost: breakdown.cost,
+            credits: breakdown.cost * 100,
           });
         }
       }
@@ -260,7 +288,7 @@ export function Dashboard() {
       };
       for (const breakdown of (d.modelBreakdowns || [])) {
         if (isSyntheticModel(breakdown.modelName)) continue;
-        entry[breakdown.modelName] = isTokens ? (breakdown.inputTokens + breakdown.outputTokens) : breakdown.cost;
+        entry[breakdown.modelName] = isTokens ? (breakdown.inputTokens + breakdown.outputTokens) : breakdown.cost * 100;
       }
       return entry;
     });
@@ -273,10 +301,10 @@ export function Dashboard() {
       .map(([name, entries]) => ({
         name,
         tokens: entries.reduce((sum, e) => sum + e.totalTokens, 0),
-        cost: entries.reduce((sum, e) => sum + e.totalCost, 0),
+        credits: entries.reduce((sum, e) => sum + e.totalCost * 100, 0),
       }))
-      .sort((a, b) => b.tokens - a.tokens);
-  }, [projectsData.data]);
+      .sort((a, b) => isTokens ? b.tokens - a.tokens : b.credits - a.credits);
+  }, [projectsData.data, isTokens]);
 
       if (coreLoading) {
     return (
@@ -315,7 +343,7 @@ export function Dashboard() {
           <div className="flex flex-col gap-1.5">
             <h1 className="text-3xl font-extrabold tracking-tight text-stone-900">TokenLens</h1>
             <p className="text-[14px] font-medium text-stone-500 leading-relaxed">
-              Monitor token usage and costs for your AI coding tools.
+              Monitor Copilot CLI usage, AI credits, and working patterns.
             </p>
           </div>
                   </div>
@@ -340,26 +368,56 @@ export function Dashboard() {
             <div className="w-px h-10 bg-stone-200/60 hidden sm:block"></div>
             <div className="flex flex-col gap-2">
               <span className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider">Metric</span>
-              <FilterTab options={[{ key: 'tokens', label: 'Tokens' }, { key: 'usd', label: 'Cost' }]} value={metric} onChange={v => setMetric(v as MetricMode)} />
+              <FilterTab options={[{ key: 'tokens', label: 'Tokens' }, { key: 'credits', label: 'AI Credits' }]} value={selectedMetric} onChange={v => setMetric(v as MetricMode)} />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Quota Usage Bar */}
+      {/* AI credit allowance */}
       {quotaData.data && (
-        <div className="mb-6 p-5 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl border border-indigo-200/60">
-          <div className="flex items-center justify-between mb-3">
+        <div className="mb-6 rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+          <div className="mb-3 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 className="text-sm font-semibold text-indigo-900">Monthly Quota Usage</h3>
-              <p className="text-xs text-indigo-600 mt-0.5">
+              <h3 className="text-sm font-semibold text-stone-900">Monthly AI Credit Allowance</h3>
+              <p className="text-xs text-stone-500 mt-0.5">
                 {new Date(quotaData.data.periodStart).toLocaleDateString()} - {new Date(quotaData.data.periodEnd).toLocaleDateString()}
               </p>
             </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold text-indigo-900">{formatUSD(quotaData.data.spentApiEquivalentUsd)}</div>
-              <div className="text-xs text-indigo-600">/ {formatUSD(quotaData.data.budgetUsd)}</div>
-            </div>
+            {editingCreditLimit ? (
+              <form onSubmit={saveCreditAllowance} className="flex w-full flex-col items-end gap-1.5 sm:w-auto">
+                <div className="flex items-center gap-1.5">
+                  <input
+                    aria-label="Monthly AI credit allowance"
+                    type="number"
+                    min="1"
+                    max="10000000"
+                    step="1"
+                    value={creditInput}
+                    onChange={event => setCreditInput(event.target.value)}
+                    className="h-9 w-32 rounded-md border border-stone-300 bg-white px-2.5 text-right font-mono text-sm font-semibold text-stone-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
+                    autoFocus
+                  />
+                  <button type="submit" disabled={creditSaving} title="Save allowance" aria-label="Save allowance" className="flex h-9 w-9 items-center justify-center rounded-md bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50">
+                    <Check size={16} />
+                  </button>
+                  <button type="button" title="Cancel" aria-label="Cancel allowance edit" onClick={() => { setEditingCreditLimit(false); setCreditError(null); }} className="flex h-9 w-9 items-center justify-center rounded-md border border-stone-200 text-stone-600 hover:bg-stone-100">
+                    <X size={16} />
+                  </button>
+                </div>
+                {creditError ? <p className="max-w-72 text-right text-[11px] text-red-600">{creditError}</p> : <p className="text-[11px] text-stone-500">credits per month</p>}
+              </form>
+            ) : (
+              <div className="flex items-center gap-2 text-right">
+                <div>
+                  <div className="text-2xl font-bold text-stone-900">{formatCredits(quotaData.data.spentCredits)}</div>
+                  <div className="text-xs text-stone-500">of {formatCredits(quotaData.data.creditLimit)} credits</div>
+                </div>
+                <button type="button" title="Edit monthly allowance" aria-label="Edit monthly AI credit allowance" onClick={() => setEditingCreditLimit(true)} className="flex h-9 w-9 items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-100 hover:text-stone-800">
+                  <Pencil size={15} />
+                </button>
+              </div>
+            )}
           </div>
           
           {/* Progress Bar with Percentage */}
@@ -368,7 +426,7 @@ export function Dashboard() {
               className={`h-full transition-all duration-500 flex items-center justify-center ${
                 quotaData.data.status === 'over' ? 'bg-red-500' : 
                 quotaData.data.status === 'near' ? 'bg-amber-500' : 
-                'bg-indigo-500'
+                'bg-emerald-600'
               }`}
               style={{ width: `${Math.min(100, quotaData.data.percentUsed)}%` }}
             >
@@ -381,26 +439,29 @@ export function Dashboard() {
                 <span className={`text-xs font-bold ${
                   quotaData.data.status === 'over' ? 'text-red-600' : 
                   quotaData.data.status === 'near' ? 'text-amber-600' : 
-                  'text-indigo-600'
+                  'text-emerald-700'
                 }`}>{quotaData.data.percentUsed.toFixed(1)}%</span>
               </div>
             )}
           </div>
           
-          <div className="grid grid-cols-3 gap-4 text-xs">
+          <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-3">
             <div>
-              <div className="text-indigo-500 mb-0.5">Used</div>
-              <div className="text-indigo-900 font-semibold">{formatUSD(quotaData.data.spentApiEquivalentUsd)}</div>
+              <div className="text-stone-500 mb-0.5">Used locally</div>
+              <div className="text-stone-900 font-semibold">{formatCredits(quotaData.data.spentCredits)} credits</div>
             </div>
             <div>
-              <div className="text-indigo-500 mb-0.5">Projected</div>
-              <div className="text-indigo-900 font-semibold">{formatUSD(quotaData.data.projectedMonthUsd)}</div>
+              <div className="text-stone-500 mb-0.5">Projected</div>
+              <div className="text-stone-900 font-semibold">{formatCredits(quotaData.data.projectedCredits)} credits</div>
             </div>
             <div>
-              <div className="text-indigo-500 mb-0.5">Days left</div>
-              <div className="text-indigo-900 font-semibold">{quotaData.data.daysUntilReset} days</div>
+              <div className="text-stone-500 mb-0.5">Estimated API value</div>
+              <div className="text-stone-900 font-semibold">{formatUSD(quotaData.data.spentApiEquivalentUsd)}</div>
             </div>
           </div>
+          <p className="mt-3 border-t border-stone-100 pt-3 text-[11px] leading-relaxed text-stone-500">
+            Local estimate from Copilot CLI token logs. Your company's official shared-pool balance may also include usage from other Copilot surfaces and users.
+          </p>
         </div>
       )}
 
@@ -410,12 +471,12 @@ export function Dashboard() {
         <KPICard label="Input context" value={formatTokens(totals.inputTokens)} sub="input tokens" insight="Total context tokens consumed."/>
         <KPICard label="Output context" value={formatTokens(totals.outputTokens)} sub="model generated" insight="Tokens generated by models." />
         <KPICard label="Output/Input" value={formatPercent(outputRatio)} insight="Ratio of generation to context." />
-        <KPICard label="Total cost" value={formatUSD(totals.totalCost)} insight="Estimated cost for the period." />
+        <KPICard label="AI credits" value={formatCredits(totals.totalCost * 100)} insight={`${formatUSD(totals.totalCost)} estimated API-equivalent value.`} />
         {quotaData.data ? (
           <KPICard 
-            label="Quota usage" 
+            label="Credit usage"
             value={`${quotaData.data.percentUsed.toFixed(0)}%`}
-            insight={`${quotaData.data.status === 'over' ? '🔴 Over' : quotaData.data.status === 'near' ? '🟡 Near' : '🟢 Good'} - Used ${formatUSD(quotaData.data.spentApiEquivalentUsd)} / ${formatUSD(quotaData.data.budgetUsd)}`}
+            insight={`${quotaData.data.status === 'over' ? 'Over allowance' : quotaData.data.status === 'near' ? 'Near allowance' : 'On track'} - ${formatCredits(quotaData.data.spentCredits)} / ${formatCredits(quotaData.data.creditLimit)} credits`}
           />
         ) : insightsData.data ? (
           <KPICard 
@@ -435,9 +496,9 @@ export function Dashboard() {
             <div className="text-xs text-stone-500 mt-1">tokens/session</div>
           </div>
           <div className="p-4 bg-white rounded-xl border border-stone-200/50 shadow-sm">
-            <div className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-1">Avg cost per day</div>
-            <div className="text-2xl font-bold text-stone-900">{formatUSD(insightsData.data.avgCostPerDay)}</div>
-            <div className="text-xs text-stone-500 mt-1">USD/day</div>
+            <div className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-1">Avg credits per day</div>
+            <div className="text-2xl font-bold text-stone-900">{formatCredits(insightsData.data.avgCostPerDay * 100)}</div>
+            <div className="text-xs text-stone-500 mt-1">AI credits/day</div>
           </div>
           <div className="p-4 bg-white rounded-xl border border-stone-200/50 shadow-sm">
             <div className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-1">Avg calls per day</div>
@@ -454,43 +515,45 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* Quota Insights Row - shown only if quota is configured */}
+      {/* Credit pacing insights */}
       {quotaData.data && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border border-green-200/50 shadow-sm">
-            <div className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-1">Remaining quota</div>
-            <div className="text-2xl font-bold text-green-900">
-              {formatUSD(quotaData.data.budgetUsd - quotaData.data.spentApiEquivalentUsd)}
+          <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200/50 shadow-sm">
+            <div className="text-xs font-semibold text-emerald-700 uppercase tracking-wider mb-1">Credits remaining</div>
+            <div className="text-2xl font-bold text-emerald-950">
+              {formatCredits(quotaData.data.remainingCredits)}
             </div>
-            <div className="text-xs text-green-600 mt-1">
-              {((quotaData.data.budgetUsd - quotaData.data.spentApiEquivalentUsd) / quotaData.data.budgetUsd * 100).toFixed(1)}% remaining
+            <div className="text-xs text-emerald-700 mt-1">
+              {Math.max(0, 100 - quotaData.data.percentUsed).toFixed(1)}% remaining
             </div>
           </div>
-          <div className="p-4 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl border border-blue-200/50 shadow-sm">
-            <div className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-1">Daily budget</div>
-            <div className="text-2xl font-bold text-blue-900">
-              {formatUSD(quotaData.data.daysUntilReset > 0 ? (quotaData.data.budgetUsd - quotaData.data.spentApiEquivalentUsd) / quotaData.data.daysUntilReset : 0)}
+          <div className="p-4 bg-sky-50 rounded-lg border border-sky-200/50 shadow-sm">
+            <div className="text-xs font-semibold text-sky-700 uppercase tracking-wider mb-1">Daily credit pace</div>
+            <div className="text-2xl font-bold text-sky-950">
+              {formatCredits(quotaData.data.dailyCreditBudget)}
             </div>
-            <div className="text-xs text-blue-600 mt-1">to stay within budget</div>
+            <div className="text-xs text-sky-700 mt-1">credits/day to stay within allowance</div>
           </div>
-          <div className="p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl border border-purple-200/50 shadow-sm">
-            <div className="text-xs font-semibold text-purple-600 uppercase tracking-wider mb-1">Projected variance</div>
+          <div className="p-4 bg-stone-100 rounded-lg border border-stone-200/70 shadow-sm">
+            <div className="text-xs font-semibold text-stone-600 uppercase tracking-wider mb-1">Projected variance</div>
             <div className={`text-2xl font-bold ${
-              quotaData.data.projectedMonthUsd > quotaData.data.budgetUsd ? 'text-red-900' : 'text-green-900'
+              quotaData.data.projectedCredits > quotaData.data.creditLimit ? 'text-red-900' : 'text-emerald-900'
             }`}>
-              {quotaData.data.projectedMonthUsd > quotaData.data.budgetUsd ? '+' : ''}
-              {formatUSD(quotaData.data.projectedMonthUsd - quotaData.data.budgetUsd)}
+              {quotaData.data.projectedCredits > quotaData.data.creditLimit ? '+' : ''}
+              {formatCredits(Math.abs(quotaData.data.projectedCredits - quotaData.data.creditLimit))}
             </div>
             <div className={`text-xs mt-1 ${
-              quotaData.data.projectedMonthUsd > quotaData.data.budgetUsd ? 'text-red-600' : 'text-green-600'
+              quotaData.data.projectedCredits > quotaData.data.creditLimit ? 'text-red-600' : 'text-emerald-700'
             }`}>
-              {quotaData.data.projectedMonthUsd > quotaData.data.budgetUsd ? 'projected overage' : 'projected savings'}
+              {quotaData.data.projectedCredits > quotaData.data.creditLimit
+                ? `${formatUSD(quotaData.data.projectedOverageUsd)} estimated overage`
+                : 'credits below allowance'}
             </div>
           </div>
-          <div className="p-4 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-200/50 shadow-sm">
-            <div className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-1">Quota resets in</div>
+          <div className="p-4 bg-amber-50 rounded-lg border border-amber-200/50 shadow-sm">
+            <div className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1">Allowance resets in</div>
             <div className="text-2xl font-bold text-amber-900">{quotaData.data.daysUntilReset}</div>
-            <div className="text-xs text-amber-600 mt-1">
+            <div className="text-xs text-amber-700 mt-1">
               {new Date(quotaData.data.periodEnd).toLocaleDateString()}
             </div>
           </div>
@@ -505,8 +568,8 @@ export function Dashboard() {
               <BarChart data={modelTrendData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
                 <XAxis dataKey="date" tick={{ fill: '#78716c', fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#78716c', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => isTokens ? formatTokens(v) : formatUSD(v)} />
-                <Tooltip content={<TooltipBox fmt={isTokens ? formatTokens : formatUSD} />} />
+                <YAxis tick={{ fill: '#78716c', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => isTokens ? formatTokens(v) : formatCredits(v)} />
+                <Tooltip content={<TooltipBox fmt={isTokens ? formatTokens : formatCredits} />} />
                 <Legend wrapperStyle={{ fontSize: 11, paddingTop: 12 }} />
                 {modelAgg.slice(0, 6).map((m, i) => (
                   <Bar key={m.name} dataKey={m.name} stackId="1" fill={C[i % C.length]} fillOpacity={0.85} />
@@ -528,7 +591,7 @@ export function Dashboard() {
       {/* 24-Hour Activity Heatmap */}
       {hourlyData.data && (
         <div className="mb-4">
-          <HeatmapSection entries={hourlyData.data.entries} metric={isTokens ? 'tokens' :'usd'} isToday={timeRange === 'today'} />
+          <HeatmapSection entries={hourlyData.data.entries} metric={isTokens ? 'tokens' : 'credits'} isToday={timeRange === 'today'} />
         </div>
       )}
 
@@ -549,7 +612,7 @@ export function Dashboard() {
               <PieChart margin={{ left: 0, right: 0, top: 0, bottom: 0 }}>
                 <Pie
                   data={modelAgg.slice(0, 6)}
-                  dataKey={dataKey === 'tokens' ? 'tokens' : 'cost'}
+                  dataKey={dataKey}
                   nameKey="name"
                   cx="50%"
                   cy="50%"
@@ -561,7 +624,7 @@ export function Dashboard() {
                     <Cell key={index} fill={C[index % C.length]} fillOpacity={0.85} stroke="transparent" />
                   ))}
                 </Pie>
-                <Tooltip content={<TooltipBox fmt={isTokens ? formatTokens : formatUSD} />} />
+                <Tooltip content={<TooltipBox fmt={isTokens ? formatTokens : formatCredits} />} />
                 <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: 11 }} />
               </PieChart>
             ) : (
@@ -579,12 +642,12 @@ export function Dashboard() {
               </div>
             </Panel>
           ) : (
-            <Panel title="Project distribution" subtitle={`Top 8 projects by ${isTokens ? 'tokens' : 'cost'}`}>
+            <Panel title="Project distribution" subtitle={`Top 8 projects by ${isTokens ? 'tokens' : 'AI credits'}`}>
               <ResponsiveContainer width="100%" height={280}>
                 {projectPieData.length > 0 ? (
                   <BarChart data={projectPieData.slice(0, 8)} layout="vertical" margin={{ left: 8, right: 8, top: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" horizontal={false} />
-                    <XAxis type="number" tick={{ fill: '#78716c', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => isTokens ? formatTokens(v) : formatUSD(v)} />
+                    <XAxis type="number" tick={{ fill: '#78716c', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => isTokens ? formatTokens(v) : formatCredits(v)} />
 <YAxis type="category" dataKey="name" tick={{ fill: '#57534e', fontSize: 11 }} axisLine={false} tickLine={false} width={180} tickFormatter={(v: string) => {
                       const parts = v.split('/');
                       return parts.length > 2 ? '.../' + parts.slice(-2).join('/') : v;
@@ -594,11 +657,11 @@ export function Dashboard() {
                       return (
                         <div className="bg-white rounded-lg shadow-lg border border-stone-200 px-3 py-2 text-[12px]">
                           <p className="font-semibold text-stone-700 mb-1">{payload[0]?.payload?.name}</p>
-                          <p className="text-stone-500">{isTokens ? formatTokens(Number(payload[0]?.value) || 0) : formatUSD(Number(payload[0]?.value) || 0)}</p>
+                          <p className="text-stone-500">{isTokens ? formatTokens(Number(payload[0]?.value) || 0) : `${formatCredits(Number(payload[0]?.value) || 0)} credits`}</p>
                         </div>
                       );
 }} />
-                    <Bar dataKey={dataKey === 'tokens' ? 'tokens' : 'cost'} radius={[0, 6, 6, 0]} maxBarSize={24}>
+                    <Bar dataKey={dataKey} radius={[0, 6, 6, 0]} maxBarSize={24}>
                       {projectPieData.slice(0, 8).map((_, index) => (
                         <Cell key={index} fill={C[index % C.length]} fillOpacity={0.85} />
                       ))}
@@ -629,7 +692,7 @@ export function Dashboard() {
                 <th className="text-right py-3 px-4 text-stone-400 font-semibold text-[10px]">Input</th>
                 <th className="text-right py-3 px-4 text-stone-400 font-semibold text-[10px]">Output</th>
                                 <th className="text-right py-3 px-4 text-stone-600 font-semibold text-[10px]">Total tokens</th>
-                <th className="text-right py-3 px-4 text-stone-400 font-semibold text-[10px]">Cost</th>
+                <th className="text-right py-3 px-4 text-stone-400 font-semibold text-[10px]">AI credits</th>
                 <th className="text-left py-3 px-4 text-stone-400 font-semibold text-[10px]">Models</th>
               </tr>
             </thead>
@@ -640,7 +703,7 @@ export function Dashboard() {
                   <td className="py-2.5 px-4 text-right font-mono text-stone-500">{formatTokens(d.inputTokens)}</td>
                   <td className="py-2.5 px-4 text-right font-mono text-stone-500">{formatTokens(d.outputTokens)}</td>
                                     <td className="py-2.5 px-4 text-right font-mono font-semibold text-indigo-600">{formatTokens(d.totalTokens)}</td>
-                  <td className="py-2.5 px-4 text-right font-mono font-medium text-stone-600 bg-stone-50/40">{formatUSD(d.totalCost)}</td>
+                  <td className="py-2.5 px-4 text-right font-mono font-medium text-stone-600 bg-stone-50/40">{formatCredits(d.totalCost * 100)}</td>
                   <td className="py-2.5 px-4text-stone-500 font-medium truncate max-w-[200px]">{d.modelsUsed.filter(m => !isSyntheticModel(m)).map(shortModelName).join(', ') || '-'}</td>
                 </tr>
               ))}

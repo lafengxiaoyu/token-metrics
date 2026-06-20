@@ -44,18 +44,18 @@ export function MetricToggle({ mode, onToggle }: MetricToggleProps) {
           fontSize: '14px',
           fontWeight: '500',
           cursor: 'pointer',
-          backgroundColor: mode === 'usd' ? '#3b82f6' : '#f3f4f6',
-          color: mode === 'usd' ? '#ffffff' : '#374151',
+          backgroundColor: mode === 'credits' ? '#3b82f6' : '#f3f4f6',
+          color: mode === 'credits' ? '#ffffff' : '#374151',
           transition: 'background-color 0.2s, color 0.2s'
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = mode === 'usd' ? '#2563eb' : '#e5e7eb';
+          e.currentTarget.style.backgroundColor = mode === 'credits' ? '#2563eb' : '#e5e7eb';
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = mode === 'usd' ? '#3b82f6' : '#f3f4f6';
+          e.currentTarget.style.backgroundColor = mode === 'credits' ? '#3b82f6' : '#f3f4f6';
         }}
       >
-        Cost (USD)
+        AI Credits
       </button>
     </div>
   );

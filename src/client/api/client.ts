@@ -181,6 +181,19 @@ export async function fetchQuota(): Promise<QuotaUsage | null> {
   return json.data;
 }
 
+export async function updateCreditLimit(monthlyCredits: number): Promise<QuotaUsage> {
+  const res = await fetch(BASE + '/quota', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ monthlyCredits }),
+  });
+  const json = await res.json() as ApiResult<QuotaUsage> | { error?: string };
+  if (!res.ok) {
+    throw new Error('error' in json && json.error ? json.error : 'Failed to update credit allowance');
+  }
+  return (json as ApiResult<QuotaUsage>).data;
+}
+
 export async function fetchInsights(provider = 'all', range: TimeRangeKey = '30d'): Promise<InsightsDTO> {
   const { from, to } = timeRangeToDates(range);
   const res = await fetch(BASE + '/insights' + qs(provider, { from, to }));

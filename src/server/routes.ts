@@ -12,7 +12,7 @@ import {
 import {getAnalytics } from './analyticsService.js';
 import { getHourlyActivity } from './hourlyActivityService.js';
 import { getEfficiencyCoach } from './efficiencyCoachService.js';
-import { getPlanUsageOrNull } from '../plan-usage.js';
+import { getPlanUsage, getPlanUsageOrNull, saveCopilotCreditLimit } from '../plan-usage.js';
 import { analyzeSecurityAudit, analyzeReasoningDepth, analyzeConversationQuality, classifyQuestions, analyzeToolEfficiency, analyzeFileActivity, analyzeSessionDurations } from './insightsService.js';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -170,6 +170,20 @@ try {
       res.json(ok(planUsage));
     } catch (err) {
       res.status(500).json(withWarning(null, [{ code: 'QUOTA_ERROR', message: err instanceof Error ? err.message : String(err) }]));
+    }
+  });
+
+  app.put('/api/quota', async (req: Request, res: Response) => {
+    try {
+      const plan = await saveCopilotCreditLimit(req.body?.monthlyCredits);
+      res.json(ok(await getPlanUsage(plan)));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.startsWith('Credit allowance must')) {
+        res.status(400).json({ error: message });
+      } else {
+        res.status(500).json(withWarning(null, [{ code: 'QUOTA_UPDATE_ERROR', message }]));
+      }
     }
   });
 

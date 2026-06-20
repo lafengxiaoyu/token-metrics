@@ -1,9 +1,39 @@
-import { readPlan, type Plan } from './config.js'
+import { readPlan, savePlan, type Plan } from './config.js'
 import { parseAllSessions } from './parser.js'
+import { PRESET_PLANS } from './plans.js'
 import type { DateRange, ProjectSummary } from './types.js'
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 const PLAN_NEAR_THRESHOLD_PCT = 80
+const AI_CREDITS_PER_USD = 100
+
+export const DEFAULT_COPILOT_CREDIT_PLAN: Plan = {
+  ...PRESET_PLANS['copilot-business'],
+  setAt: '2026-06-01T00:00:00.000Z',
+}
+
+export function normalizeCreditLimit(value: unknown): number {
+  const credits = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(credits) || !Number.isInteger(credits) || credits < 1 || credits > 10_000_000) {
+    throw new Error('Credit allowance must be a whole number between 1 and 10,000,000')
+  }
+  return credits
+}
+
+export async function saveCopilotCreditLimit(value: unknown): Promise<Plan> {
+  const monthlyCredits = normalizeCreditLimit(value)
+  const current = await readPlan()
+  const plan: Plan = {
+    id: 'custom',
+    monthlyCredits,
+    monthlyUsd: monthlyCredits / AI_CREDITS_PER_USD,
+    provider: 'copilot',
+    resetDay: current?.resetDay ?? 1,
+    setAt: new Date().toISOString(),
+  }
+  await savePlan(plan)
+  return plan
+}
 
 export type PlanStatus = 'under' | 'near' | 'over'
 
@@ -13,10 +43,17 @@ export type PlanUsage = {
   periodEnd: Date
   spentApiEquivalentUsd: number
   budgetUsd: number
+  spentCredits: number
+  creditLimit: number
+  remainingCredits: number
   percentUsed: number
   status: PlanStatus
   projectedMonthUsd: number
+  projectedCredits: number
+  dailyCreditBudget: number
+  projectedOverageUsd: number
   daysUntilReset: number
+  isEstimate: true
 }
 
 export function clampResetDay(resetDay: number | undefined): number {
@@ -107,11 +144,17 @@ export function projectMonthEnd(
 export function getPlanUsageFromProjects(plan: Plan, projects: ProjectSummary[], today = new Date()): PlanUsage {
   const { periodStart, periodEnd } = computePeriodFromResetDay(plan.resetDay, today)
   const spent = projects.reduce((sum, p) => sum + p.totalCostUSD, 0)
-  const budgetUsd = plan.monthlyUsd
-  const percentUsed = budgetUsd > 0 ? (spent / budgetUsd) * 100 : 0
+  const spentCredits = spent * AI_CREDITS_PER_USD
+  const creditLimit = plan.monthlyCredits ?? plan.monthlyUsd * AI_CREDITS_PER_USD
+  const budgetUsd = creditLimit / AI_CREDITS_PER_USD
+  const remainingCredits = Math.max(0, creditLimit - spentCredits)
+  const percentUsed = creditLimit > 0 ? (spentCredits / creditLimit) * 100 : 0
   const status: PlanStatus = percentUsed > 100 ? 'over' : percentUsed >= PLAN_NEAR_THRESHOLD_PCT ? 'near' : 'under'
   const projectedMonthUsd = projectMonthEnd(projects, periodStart, periodEnd, today, spent)
+  const projectedCredits = projectedMonthUsd * AI_CREDITS_PER_USD
   const daysUntilReset = Math.max(0, diffCalendarDays(today, periodEnd))
+  const dailyCreditBudget = daysUntilReset > 0 ? remainingCredits / daysUntilReset : 0
+  const projectedOverageUsd = Math.max(0, projectedCredits - creditLimit) / AI_CREDITS_PER_USD
 
   return {
     plan,
@@ -119,10 +162,17 @@ export function getPlanUsageFromProjects(plan: Plan, projects: ProjectSummary[],
     periodEnd,
     spentApiEquivalentUsd: spent,
     budgetUsd,
+    spentCredits,
+    creditLimit,
+    remainingCredits,
     percentUsed,
     status,
     projectedMonthUsd,
+    projectedCredits,
+    dailyCreditBudget,
+    projectedOverageUsd,
     daysUntilReset,
+    isEstimate: true,
   }
 }
 
@@ -138,11 +188,15 @@ export async function getPlanUsage(plan: Plan, today = new Date()): Promise<Plan
 }
 
 export async function getPlanUsageOrNull(today = new Date()): Promise<PlanUsage | null> {
-  const plan = await readPlan()
-  if (!isActivePlan(plan)) return null
+  const configuredPlan = await readPlan()
+  if (configuredPlan?.id === 'none') return null
+  const plan = isActivePlan(configuredPlan) ? configuredPlan : DEFAULT_COPILOT_CREDIT_PLAN
   return getPlanUsage(plan, today)
 }
 
 export function isActivePlan(plan: Plan | undefined): plan is Plan {
-  return plan !== undefined && plan.id !== 'none' && Number.isFinite(plan.monthlyUsd) && plan.monthlyUsd > 0
+  return plan !== undefined
+    && plan.id !== 'none'
+    && ((Number.isFinite(plan.monthlyCredits) && (plan.monthlyCredits ?? 0) > 0)
+      || (Number.isFinite(plan.monthlyUsd) && plan.monthlyUsd > 0))
 }

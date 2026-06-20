@@ -62,7 +62,7 @@ export interface BlocksResponse {
   blocks: BlockEntry[];
 }
 
-export type MetricMode = 'tokens' | 'usd' | 'cost';
+export type MetricMode = 'tokens' | 'credits';
 export type GranularityMode = 'day' | 'hour';
 
 export interface ToolUsageEntry {
@@ -179,6 +179,7 @@ export interface QuotaUsage {
   plan: {
     id: string;
     monthlyUsd: number;
+    monthlyCredits?: number;
     provider: string;
     resetDay?: number;
   };
@@ -186,10 +187,17 @@ export interface QuotaUsage {
   periodEnd: string;
   spentApiEquivalentUsd: number;
   budgetUsd: number;
+  spentCredits: number;
+  creditLimit: number;
+  remainingCredits: number;
   percentUsed: number;
   status: 'under' | 'near' | 'over';
   projectedMonthUsd: number;
+  projectedCredits: number;
+  dailyCreditBudget: number;
+  projectedOverageUsd: number;
   daysUntilReset: number;
+  isEstimate: boolean;
 }
 
 export interface InsightsDTO {

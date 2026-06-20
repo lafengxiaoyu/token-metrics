@@ -15,7 +15,7 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 interface HeatmapSectionProps {
   entries: HourlyActivityEntry[];
-  metric: 'tokens' | 'usd';
+  metric: 'tokens' | 'credits';
   isToday: boolean;
 }
 
@@ -41,7 +41,7 @@ const d = new Date(entry.date);
 
       if (isToday && entry.date === todayStr && hour > currentHour) continue;
 
-      const val = metric === 'tokens' ? entry.totalTokens : entry.totalCost;
+      const val = metric === 'tokens' ? entry.totalTokens : entry.totalCost * 100;
       g[day][hour] += val;
       if (g[day][hour] > max) max = g[day][hour];
     }
@@ -83,7 +83,7 @@ const d = new Date(entry.date);
 key={hourIdx}
                   className="w-8 h-8 rounded-sm cursor-pointer transition-all hover:ring-2 hover:ring-indigo-400 relative flex-shrink-0"
                   style={{ backgroundColor: getColor(val) }}
-                  title={`${DAYS[dayIdx]} ${hourIdx}:00 - ${metric === 'tokens' ? formatNumber(val) + ' tokens' : '$' + val.toFixed(4)}`}
+                  title={`${DAYS[dayIdx]} ${hourIdx}:00 - ${metric === 'tokens' ? formatNumber(val) + ' tokens' : formatNumber(val) + ' credits'}`}
                 >
                   {isToday && hourIdx > currentHour && (
                     <div className="absolute inset-0 bg-stone-200/50 rounded-sm" />

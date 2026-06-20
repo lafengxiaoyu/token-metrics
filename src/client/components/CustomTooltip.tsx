@@ -58,7 +58,7 @@ export function CustomTooltip({ active, payload, label, mode }: CustomTooltipPro
                 color: '#111827',
                 fontSize: '13px'
               }}>
-                {mode === 'usd' ? `$${entry.value.toFixed(2)}` : entry.value.toLocaleString()}
+                {mode === 'credits' ? `${entry.value.toLocaleString()} credits` : entry.value.toLocaleString()}
               </td>
             </tr>
           ))}

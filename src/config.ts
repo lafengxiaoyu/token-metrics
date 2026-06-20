@@ -3,12 +3,13 @@ import { join } from 'path'
 import { homedir } from 'os'
 import { randomBytes } from 'crypto'
 
-export type PlanId = 'claude-pro' | 'claude-max' | 'claude-max-5x' | 'cursor-pro' | 'custom' | 'none'
-export type PlanProvider = 'claude' | 'codex' | 'cursor' | 'all'
+export type PlanId = 'copilot-business' | 'claude-pro' | 'claude-max' | 'claude-max-5x' | 'cursor-pro' | 'custom' | 'none'
+export type PlanProvider = 'copilot' | 'claude' | 'codex' | 'cursor' | 'all'
 
 export type Plan = {
   id: PlanId
   monthlyUsd: number
+  monthlyCredits?: number
   provider: PlanProvider
   resetDay?: number
   setAt: string

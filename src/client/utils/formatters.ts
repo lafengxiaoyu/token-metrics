@@ -17,6 +17,12 @@ export function formatUSD(n: number): string {
   }).format(n);
 }
 
+export function formatCredits(n: number): string {
+  return new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: n < 10 ? 1 : 0,
+  }).format(Math.max(0, n));
+}
+
 export function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-US', {

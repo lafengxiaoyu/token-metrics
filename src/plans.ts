@@ -1,9 +1,16 @@
 import type { Plan, PlanId, PlanProvider } from './config.js'
 
-export const PLAN_PROVIDERS: PlanProvider[] = ['all', 'claude', 'codex', 'cursor']
-export const PLAN_IDS: PlanId[] = ['claude-pro', 'claude-max', 'claude-max-5x', 'cursor-pro', 'custom', 'none']
+export const PLAN_PROVIDERS: PlanProvider[] = ['all', 'copilot', 'claude', 'codex', 'cursor']
+export const PLAN_IDS: PlanId[] = ['copilot-business', 'claude-pro', 'claude-max', 'claude-max-5x', 'cursor-pro', 'custom', 'none']
 
-export const PRESET_PLANS: Record<'claude-pro' | 'claude-max' | 'claude-max-5x' | 'cursor-pro', Omit<Plan, 'setAt'>> = {
+export const PRESET_PLANS: Record<'copilot-business' | 'claude-pro' | 'claude-max' | 'claude-max-5x' | 'cursor-pro', Omit<Plan, 'setAt'>> = {
+  'copilot-business': {
+    id: 'copilot-business',
+    monthlyUsd: 30,
+    monthlyCredits: 3000,
+    provider: 'copilot',
+    resetDay: 1,
+  },
   'claude-pro': {
     id: 'claude-pro',
     monthlyUsd: 20,
@@ -47,6 +54,8 @@ export function getPresetPlan(id: string): Omit<Plan, 'setAt'> | null {
 
 export function planDisplayName(id: PlanId): string {
   switch (id) {
+    case 'copilot-business':
+      return 'Copilot Business (3,000 credits)'
     case 'claude-pro':
       return 'Claude Pro'
     case 'claude-max':

@@ -29,7 +29,8 @@ This version is optimized exclusively for **GitHub Copilot CLI** users:
 
 ### Core Analytics
 
-- **Token Tracking** — Input, output, and reasoning tokens with accurate cost estimation
+- **AI Credit Tracking** — Estimates GitHub AI Credits from input, output, and cached token usage under the June 2026 billing model
+- **Token Tracking** — Input, output, and reasoning tokens with API-equivalent cost estimation
 - **Daily Trends** — Historical usage charts with 7-day, 30-day, and custom ranges
 - **Model Distribution** — Track which Copilot models you use most (Sonnet/Haiku/Opus/GPT)
 - **Project Filtering** — Filter usage by Git repository
@@ -185,12 +186,13 @@ tokenlens --version               # Show version
 
 ---
 
-### Budget Tracking 💰
+### AI Credit Tracking
 
-- Set monthly token quotas in `~/.config/codeburn/config.json`
-- Real-time usage percentage display
-- Visual progress indicators
-- Cost trend monitoring
+- Tracks the current company allowance of 3,000 AI credits per month by default
+- Lets users change the monthly allowance directly from the dashboard and saves it locally
+- Converts estimated API-equivalent cost at GitHub's fixed rate of 1 AI credit = $0.01 USD
+- Shows credits used, remaining, daily pacing, and projected month-end usage
+- Uses local Copilot CLI logs, so the result is an estimate and does not include other users or Copilot surfaces in the company pool
 
 ---
 
@@ -200,7 +202,7 @@ The main dashboard provides:
 
 | Component | Description |
 |-----------|-------------|
-| **KPI Cards** | Total tokens, Input/Output/Reasoning context, Cost, Budget usage |
+| **KPI Cards** | Total tokens, Input/Output context, estimated cost, and AI credit usage |
 | **Model Trend** | Stacked bar chart of Copilot models over time |
 | **Tool Call Trend** | Frequency of tool usage over time (bash, view, edit, grep, etc.) |
 | **24-Hour Heatmap** | Activity intensity by hour and day of week |
@@ -237,7 +239,7 @@ All API endpoints return responses wrapped in:
 | `GET` | `/api/models` | Model-level usage breakdown |
 | `GET` | `/api/analytics` | Tool usage and productivity KPIs |
 | `GET` | `/api/hourly-activity` | Hourly activity data for 24-hour heatmap |
-| `GET` | `/api/quota` | Budget quota information and usage percentage |
+| `GET` | `/api/quota` | Estimated AI credit allowance, pacing, and usage percentage |
 | `GET` | `/api/insights/security` | Security audit analysis |
 | `GET` | `/api/insights/reasoning` | AI reasoning depth analysis |
 | `GET` | `/api/insights/conversation` | Conversation quality metrics |
@@ -336,22 +338,27 @@ src/
 
 ## Configuration
 
-### Budget Quota (Optional)
+### AI Credit Allowance (Optional)
 
-Create `~/.config/codeburn/config.json` to set monthly token limits:
+The dashboard defaults to the current 3,000-credit company allowance. To override it, create `~/.config/codeburn/config.json`:
 
 ```json
 {
-  "quota": {
-    "monthlyTokenLimit": 1000000
+  "plan": {
+    "id": "custom",
+    "monthlyUsd": 30,
+    "monthlyCredits": 3000,
+    "provider": "copilot",
+    "resetDay": 1,
+    "setAt": "2026-06-01T00:00:00.000Z"
   }
 }
 ```
 
 The dashboard will show:
-- Current usage vs quota
+- Estimated local usage vs the credit allowance
 - Percentage used
-- Remaining tokens
+- Remaining credits and daily pacing
 - Visual progress bars
 
 ### Session Data
@@ -378,13 +385,13 @@ No additional configuration needed!
 - **Question Classification** — Automatic categorization
 - **Tool Efficiency** — Success rate tracking
 
-### 💰 Budget Tracking
-- Monthly token quota support
-- Real-time usage percentage
-- Visual budget indicators
+### AI Credit Tracking
+- June 2026 usage-based Copilot billing model
+- 3,000-credit monthly allowance by default
+- Credit pacing and projected overage indicators
 
 ### 📊 Enhanced Analytics
-- Improved cost calculation (99.8% accurate)
+- API-equivalent cost estimation by model and token usage
 - Better model distribution charts
 - Refined tool usage tracking
 
