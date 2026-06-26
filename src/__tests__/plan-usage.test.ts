@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { DEFAULT_COPILOT_CREDIT_PLAN, getPlanUsageFromProjects, normalizeCreditLimit, normalizeOfficialUsedCredits } from '../plan-usage.js'
 import type { ProjectSummary } from '../types.js'
@@ -64,6 +64,20 @@ function projectWithCost(costUSD: number, timestamp = '2026-06-20T10:00:00.000Z'
 }
 
 describe('Copilot AI credit usage', () => {
+  const originalFactor = process.env.TOKENLENS_LOCAL_TO_OFFICIAL_FACTOR
+
+  beforeEach(() => {
+    process.env.TOKENLENS_LOCAL_TO_OFFICIAL_FACTOR = '1'
+  })
+
+  afterEach(() => {
+    if (originalFactor === undefined) {
+      delete process.env.TOKENLENS_LOCAL_TO_OFFICIAL_FACTOR
+    } else {
+      process.env.TOKENLENS_LOCAL_TO_OFFICIAL_FACTOR = originalFactor
+    }
+  })
+
   it('validates user-configured credit allowances', () => {
     expect(normalizeCreditLimit(4500)).toBe(4500)
     expect(normalizeCreditLimit('1900')).toBe(1900)
@@ -121,5 +135,35 @@ describe('Copilot AI credit usage', () => {
     expect(usage.status).toBe('exhausted')
     expect(usage.usageSource).toBe('official-manual')
     expect(usage.isEstimate).toBe(false)
+  })
+
+  it('adds local usage after the official baseline update time', () => {
+    const usage = getPlanUsageFromProjects(
+      {
+        ...DEFAULT_COPILOT_CREDIT_PLAN,
+        officialUsedCredits: 3000,
+        officialUsageUpdatedAt: '2026-06-20T12:00:00.000Z',
+      },
+      [projectWithCost(2.5, '2026-06-21T09:00:00.000Z')],
+      new Date(2026, 5, 21, 12),
+    )
+
+    expect(usage.localEstimatedCredits).toBe(250)
+    expect(usage.spentCredits).toBe(3250)
+    expect(usage.status).toBe('over')
+    expect(usage.usageSource).toBe('official-manual')
+  })
+
+  it('applies calibrated local estimate factor when no official usage is available', () => {
+    delete process.env.TOKENLENS_LOCAL_TO_OFFICIAL_FACTOR
+    const usage = getPlanUsageFromProjects(
+      DEFAULT_COPILOT_CREDIT_PLAN,
+      [projectWithCost(8.54)],
+      new Date(2026, 5, 20, 12),
+    )
+
+    expect(usage.localEstimatedCredits).toBeCloseTo(854, 6)
+    expect(usage.spentCredits).toBeCloseTo(3077, 0)
+    expect(usage.usageSource).toBe('local-estimate-calibrated')
   })
 })

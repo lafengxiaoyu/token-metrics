@@ -200,7 +200,7 @@ export interface QuotaUsage {
   dailyCreditBudget: number;
   projectedOverageUsd: number;
   daysUntilReset: number;
-  usageSource: 'local-estimate' | 'official-manual';
+  usageSource: 'local-estimate' | 'local-estimate-calibrated' | 'official-manual' | 'official-api';
   officialUsageUpdatedAt?: string;
   isEstimate: boolean;
 }

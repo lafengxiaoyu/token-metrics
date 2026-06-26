@@ -2,10 +2,12 @@ import { readPlan, savePlan, type Plan } from './config.js'
 import { parseAllSessions } from './parser.js'
 import { PRESET_PLANS } from './plans.js'
 import type { DateRange, ProjectSummary } from './types.js'
+import { fetchOfficialCreditsForPlan } from './github-billing.js'
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 const PLAN_NEAR_THRESHOLD_PCT = 80
 const AI_CREDITS_PER_USD = 100
+const DEFAULT_LOCAL_TO_OFFICIAL_FACTOR = 3.603
 
 export const DEFAULT_COPILOT_CREDIT_PLAN: Plan = {
   ...PRESET_PLANS['copilot-business'],
@@ -66,7 +68,7 @@ export type PlanUsage = {
   dailyCreditBudget: number
   projectedOverageUsd: number
   daysUntilReset: number
-  usageSource: 'local-estimate' | 'official-manual'
+  usageSource: 'local-estimate' | 'local-estimate-calibrated' | 'official-manual' | 'official-api'
   officialUsageUpdatedAt?: string
   isEstimate: boolean
 }
@@ -119,6 +121,28 @@ function diffCalendarDays(from: Date, to: Date): number {
   return toDayIndex(to) - toDayIndex(from)
 }
 
+function resolveLocalToOfficialFactor(): number {
+  const configured = Number(process.env.TOKENLENS_LOCAL_TO_OFFICIAL_FACTOR)
+  if (Number.isFinite(configured) && configured > 0) return configured
+  return DEFAULT_LOCAL_TO_OFFICIAL_FACTOR
+}
+
+function sumCostAfterTimestamp(projects: ProjectSummary[], since: Date, now: Date): number {
+  let total = 0
+  for (const project of projects) {
+    for (const session of project.sessions) {
+      for (const turn of session.turns) {
+        if (!turn.timestamp) continue
+        const ts = new Date(turn.timestamp)
+        if (Number.isNaN(ts.getTime())) continue
+        if (ts <= since || ts > now) continue
+        total += turn.assistantCalls.reduce((sum, call) => sum + call.costUSD, 0)
+      }
+    }
+  }
+  return total
+}
+
 export function projectMonthEnd(
   projects: ProjectSummary[],
   periodStart: Date,
@@ -160,8 +184,22 @@ export function getPlanUsageFromProjects(plan: Plan, projects: ProjectSummary[],
   const { periodStart, periodEnd } = computePeriodFromResetDay(plan.resetDay, today)
   const spent = projects.reduce((sum, p) => sum + p.totalCostUSD, 0)
   const localEstimatedCredits = spent * AI_CREDITS_PER_USD
-  const usageSource = plan.officialUsedCredits === undefined ? 'local-estimate' : 'official-manual'
-  const spentCredits = plan.officialUsedCredits ?? localEstimatedCredits
+  const localFactor = resolveLocalToOfficialFactor()
+  const localCalibratedCredits = localEstimatedCredits * localFactor
+  let usageSource: PlanUsage['usageSource'] = plan.officialUsedCredits === undefined
+    ? (Math.abs(localFactor - 1) > 1e-9 ? 'local-estimate-calibrated' : 'local-estimate')
+    : 'official-manual'
+  let spentCredits = localCalibratedCredits
+  if (plan.officialUsedCredits !== undefined) {
+    spentCredits = plan.officialUsedCredits
+    if (plan.officialUsageUpdatedAt) {
+      const officialUpdatedAt = new Date(plan.officialUsageUpdatedAt)
+      if (!Number.isNaN(officialUpdatedAt.getTime())) {
+        const localDeltaCredits = sumCostAfterTimestamp(projects, officialUpdatedAt, today) * AI_CREDITS_PER_USD
+        spentCredits += localDeltaCredits
+      }
+    }
+  }
   const creditLimit = plan.monthlyCredits ?? plan.monthlyUsd * AI_CREDITS_PER_USD
   const budgetUsd = creditLimit / AI_CREDITS_PER_USD
   const remainingCredits = Math.max(0, creditLimit - spentCredits)
@@ -172,8 +210,10 @@ export function getPlanUsageFromProjects(plan: Plan, projects: ProjectSummary[],
       ? 'exhausted'
       : percentUsed >= PLAN_NEAR_THRESHOLD_PCT ? 'near' : 'under'
   const projectedMonthUsd = projectMonthEnd(projects, periodStart, periodEnd, today, spent)
-  const localProjectedCredits = projectedMonthUsd * AI_CREDITS_PER_USD
-  const projectedCredits = usageSource === 'official-manual' ? spentCredits : localProjectedCredits
+  const localProjectedCredits = projectedMonthUsd * AI_CREDITS_PER_USD * localFactor
+  const projectedCredits = usageSource === 'official-manual'
+    ? spentCredits + Math.max(0, localProjectedCredits - localCalibratedCredits)
+    : localProjectedCredits
   const daysUntilReset = Math.max(0, diffCalendarDays(today, periodEnd))
   const dailyCreditBudget = daysUntilReset > 0 ? remainingCredits / daysUntilReset : 0
   const projectedOverageUsd = Math.max(0, projectedCredits - creditLimit) / AI_CREDITS_PER_USD
@@ -209,6 +249,19 @@ export async function getPlanUsage(plan: Plan, today = new Date()): Promise<Plan
   }
   const provider = plan.provider === 'all' ? 'all' : plan.provider
   const projects = await parseAllSessions(range, provider)
+  const autoOfficial = await fetchOfficialCreditsForPlan(plan, today)
+  if (autoOfficial) {
+    const syncedPlan: Plan = {
+      ...plan,
+      officialUsedCredits: autoOfficial.credits,
+      officialUsageUpdatedAt: autoOfficial.updatedAt,
+    }
+    const usage = getPlanUsageFromProjects(syncedPlan, projects, today)
+    return {
+      ...usage,
+      usageSource: 'official-api',
+    }
+  }
   return getPlanUsageFromProjects(plan, projects, today)
 }
 

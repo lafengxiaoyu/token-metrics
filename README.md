@@ -198,6 +198,7 @@ tokenlens --version               # Show version
 - Tracks the current company allowance of 3,000 AI credits per month by default
 - Lets users change the monthly allowance directly from the dashboard and saves it locally
 - Separates the local CLI estimate from manually entered official GitHub usage, using official usage for the main allowance percentage when available
+- Automatically attempts official usage sync from GitHub Billing API when credentials are available (falls back to local estimate when unavailable)
 - Treats local trace-derived credits as incomplete diagnostic data rather than an authoritative company balance
 - Converts estimated API-equivalent cost at GitHub's fixed rate of 1 AI credit = $0.01 USD
 - Shows credits used, remaining, daily pacing, and projected month-end usage
@@ -375,6 +376,15 @@ The dashboard will show:
 - Percentage used
 - Remaining credits and daily pacing
 - Visual progress bars
+
+For automatic official usage sync, provide one of:
+- `GITHUB_TOKEN` / `GH_TOKEN` / `TOKENLENS_GITHUB_TOKEN`
+- or authenticated GitHub CLI (`gh auth login`)
+
+Optional overrides:
+- `TOKENLENS_GITHUB_USERNAME` (if auto-detecting login fails)
+- `TOKENLENS_GITHUB_ORG` (for org-billed usage via organization billing endpoint)
+- `TOKENLENS_LOCAL_TO_OFFICIAL_FACTOR` (fallback scaling factor for local trace estimate when official API is unavailable; default `3.603`)
 
 ### Session Data
 

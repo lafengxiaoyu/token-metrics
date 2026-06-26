@@ -434,7 +434,7 @@ export function Dashboard() {
                 <div>
                   <div className="text-2xl font-bold text-stone-900">{formatCredits(quotaData.data.spentCredits)}</div>
                   <div className="text-xs text-stone-500">
-                    of {formatCredits(quotaData.data.creditLimit)} credits · {quotaData.data.usageSource === 'official-manual' ? 'official usage' : 'incomplete trace estimate'}
+                    of {formatCredits(quotaData.data.creditLimit)} credits · {(quotaData.data.usageSource === 'official-manual' || quotaData.data.usageSource === 'official-api') ? 'official usage' : 'incomplete trace estimate'}
                   </div>
                 </div>
                 <button type="button" title="Edit credit settings" aria-label="Edit AI credit settings" onClick={() => setEditingCreditLimit(true)} className="flex h-9 w-9 items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-100 hover:text-stone-800">
@@ -471,7 +471,7 @@ export function Dashboard() {
           
           <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-3">
             <div>
-              <div className="text-stone-500 mb-0.5">{quotaData.data.usageSource === 'official-manual' ? 'Official usage' : 'Local trace estimate (incomplete)'}</div>
+              <div className="text-stone-500 mb-0.5">{(quotaData.data.usageSource === 'official-manual' || quotaData.data.usageSource === 'official-api') ? 'Official usage' : 'Local trace estimate (incomplete)'}</div>
               <div className="text-stone-900 font-semibold">{formatCredits(quotaData.data.spentCredits)} credits</div>
             </div>
             <div>
@@ -484,9 +484,11 @@ export function Dashboard() {
             </div>
           </div>
           <p className="mt-3 border-t border-stone-100 pt-3 text-[11px] leading-relaxed text-stone-500">
-            {quotaData.data.usageSource === 'official-manual'
-              ? `Official usage was entered manually${quotaData.data.officialUsageUpdatedAt ? ` on ${new Date(quotaData.data.officialUsageUpdatedAt).toLocaleDateString()}` : ''}. The local trace estimate is shown only for session analysis.`
-              : `Incomplete trace estimate only. It can omit input/cache tokens and usage from other Copilot surfaces, so it must not be treated as the remaining company balance. Enter GitHub's official usage above.`}
+            {(quotaData.data.usageSource === 'official-manual' || quotaData.data.usageSource === 'official-api')
+              ? `${quotaData.data.usageSource === 'official-api' ? 'Official usage was synced from GitHub billing API' : 'Official usage was entered manually'}${quotaData.data.officialUsageUpdatedAt ? ` on ${new Date(quotaData.data.officialUsageUpdatedAt).toLocaleDateString()}` : ''}. Current usage is aligned from that baseline plus local activity after the update time.`
+              : quotaData.data.usageSource === 'local-estimate-calibrated'
+                ? `Calibrated local estimate (scaled from trace data). This improves alignment with observed official billing but can still deviate from GitHub's authoritative balance.`
+                : `Incomplete trace estimate only. It can omit input/cache tokens and usage from other Copilot surfaces, so it must not be treated as the remaining company balance. Enter GitHub's official usage above.`}
           </p>
         </div>
       )}
@@ -502,7 +504,7 @@ export function Dashboard() {
           <KPICard 
             label="Credit usage"
             value={`${quotaData.data.percentUsed.toFixed(0)}%`}
-            insight={`${quotaData.data.status === 'over' ? 'Over allowance' : quotaData.data.status === 'exhausted' ? 'Allowance exhausted' : quotaData.data.status === 'near' ? 'Near allowance' : 'On track'} - ${formatCredits(quotaData.data.spentCredits)} / ${formatCredits(quotaData.data.creditLimit)} credits (${quotaData.data.usageSource === 'official-manual' ? 'official' : 'incomplete trace estimate'})`}
+            insight={`${quotaData.data.status === 'over' ? 'Over allowance' : quotaData.data.status === 'exhausted' ? 'Allowance exhausted' : quotaData.data.status === 'near' ? 'Near allowance' : 'On track'} - ${formatCredits(quotaData.data.spentCredits)} / ${formatCredits(quotaData.data.creditLimit)} credits (${(quotaData.data.usageSource === 'official-manual' || quotaData.data.usageSource === 'official-api') ? 'official' : 'incomplete trace estimate'})`}
           />
         ) : insightsData.data ? (
           <KPICard 
@@ -561,7 +563,7 @@ export function Dashboard() {
             <div className="text-xs text-sky-700 mt-1">credits/day to stay within allowance</div>
           </div>
           <div className="p-4 bg-stone-100 rounded-lg border border-stone-200/70 shadow-sm">
-            <div className="text-xs font-semibold text-stone-600 uppercase tracking-wider mb-1">{quotaData.data.usageSource === 'official-manual' ? 'Current variance' : 'Projected variance'}</div>
+            <div className="text-xs font-semibold text-stone-600 uppercase tracking-wider mb-1">{(quotaData.data.usageSource === 'official-manual' || quotaData.data.usageSource === 'official-api') ? 'Current variance' : 'Projected variance'}</div>
             <div className={`text-2xl font-bold ${
               quotaData.data.projectedCredits > quotaData.data.creditLimit ? 'text-red-900' : 'text-emerald-900'
             }`}>
