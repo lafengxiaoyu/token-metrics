@@ -7,7 +7,7 @@ import { fetchOfficialCreditsForPlan } from './github-billing.js'
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 const PLAN_NEAR_THRESHOLD_PCT = 80
 const AI_CREDITS_PER_USD = 100
-const DEFAULT_LOCAL_TO_OFFICIAL_FACTOR = 3.603
+const DEFAULT_LOCAL_TO_OFFICIAL_FACTOR = 1
 
 export const DEFAULT_COPILOT_CREDIT_PLAN: Plan = {
   ...PRESET_PLANS['copilot-business'],

@@ -532,15 +532,11 @@ function providerCallToTurn(call: ParsedProviderCall): ParsedTurn {
   const usage: TokenUsage = {
     inputTokens: call.inputTokens,
     outputTokens: call.outputTokens,
-    // @ts-expect-error Legacy multi-provider properties
-    cacheCreationInputTokens: call.cacheCreationInputTokens,
-    // @ts-expect-error Legacy multi-provider properties
-    cacheReadInputTokens: call.cacheReadInputTokens,
-    // @ts-expect-error Legacy multi-provider properties
-    cachedInputTokens: call.cachedInputTokens,
+    cacheCreationInputTokens: call.cacheCreationInputTokens ?? 0,
+    cacheReadInputTokens: call.cacheReadInputTokens ?? 0,
+    cachedInputTokens: call.cachedInputTokens ?? 0,
     reasoningTokens: call.reasoningTokens,
-    // @ts-expect-error Legacy multi-provider properties
-    webSearchRequests: call.webSearchRequests,
+    webSearchRequests: call.webSearchRequests ?? 0,
   }
 
   const apiCall: ParsedApiCall = {
@@ -557,10 +553,8 @@ function providerCallToTurn(call: ParsedProviderCall): ParsedTurn {
     timestamp: call.timestamp,
     bashCommands: call.bashCommands,
     deduplicationKey: call.deduplicationKey,
-    // @ts-expect-error Legacy multi-provider properties
-    linesAdded: call.linesAdded,
-    // @ts-expect-error Legacy multi-provider properties  
-    linesDeleted: call.linesDeleted,
+    linesAdded: call.linesAdded ?? 0,
+    linesDeleted: call.linesDeleted ?? 0,
   }
 
   return {

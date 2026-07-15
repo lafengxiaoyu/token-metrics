@@ -15,6 +15,7 @@ import { MemoryCache } from '../cache/memory.js';
 import { readJsonCache, writeJsonCache } from '../cache/disk.js';
 
 const memoryCache = new MemoryCache<string>(60 * 1000);
+const DAILY_DTO_CACHE_VERSION = 3;
 
 function toDateRange(query: UsageQuery) {
   return { start: query.from, end: query.to };
@@ -50,6 +51,8 @@ interface InternalModelAcc {
   provider: string;
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   totalTokens: number;
   totalCost: number;
   calls: number;
@@ -72,6 +75,8 @@ interface InternalDayAcc {
   date: string;
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   totalTokens: number;
   totalCost: number;
   calls: number;
@@ -89,11 +94,13 @@ function projectsToDailyDTO(projects: ProjectSummary[]): DailyUsageDTO[] {
 date,
         inputTokens: 0,
         outputTokens: 0,
-        totalTokens: 0,
-        totalCost: 0,
-        calls: 0,
-        sessions: new Set(),
-        models: new Map(),
+cacheReadTokens: 0,
+cacheWriteTokens: 0,
+totalTokens: 0,
+totalCost: 0,
+calls: 0,
+sessions: new Set(),
+models: new Map(),
         providers: new Map(),
       });
     }
@@ -113,9 +120,11 @@ const day = ensureDay(sessionDate);
 
           callDay.inputTokens += call.usage.inputTokens;
           callDay.outputTokens += call.usage.outputTokens;
+callDay.cacheReadTokens += call.usage.cacheReadInputTokens;
+callDay.cacheWriteTokens += call.usage.cacheCreationInputTokens;
 callDay.totalTokens += call.usage.inputTokens + call.usage.outputTokens;
-          callDay.totalCost += call.costUSD;
-          callDay.calls += 1;
+callDay.totalCost += call.costUSD;
+callDay.calls += 1;
 
           // Model breakdown
           let model = callDay.models.get(call.model);
@@ -125,6 +134,8 @@ callDay.totalTokens += call.usage.inputTokens + call.usage.outputTokens;
               provider: call.provider,
               inputTokens: 0,
               outputTokens: 0,
+              cacheReadTokens: 0,
+              cacheWriteTokens: 0,
               totalTokens:0,
               totalCost: 0,
               calls: 0,
@@ -134,6 +145,8 @@ callDay.totalTokens += call.usage.inputTokens + call.usage.outputTokens;
           }
           model.inputTokens += call.usage.inputTokens;
           model.outputTokens += call.usage.outputTokens;
+          model.cacheReadTokens += call.usage.cacheReadInputTokens;
+          model.cacheWriteTokens += call.usage.cacheCreationInputTokens;
           model.totalTokens += call.usage.inputTokens + call.usage.outputTokens;
           model.totalCost += call.costUSD;
           model.calls += 1;
@@ -172,19 +185,37 @@ let prov = callDay.providers.get(call.provider);
       date: day.date,
       inputTokens: day.inputTokens,
       outputTokens: day.outputTokens,
-      reasoningTokens: 0,
-      totalTokens: day.totalTokens,
-      totalCost: day.totalCost,
-      calls: day.calls,
-      sessions: day.sessions.size,
-            models: [...day.models.values()].filter(m => m.modelName !== 'synthetic' && m.modelName !== '<synthetic>'),
-      providers: [...day.providers.values()].map(p => ({
-        provider: p.provider,
+            cacheReadTokens: day.cacheReadTokens,
+            cacheWriteTokens: day.cacheWriteTokens,
+            reasoningTokens: 0,
+            totalTokens: day.totalTokens,
+            totalCost: day.totalCost,
+            estimatedCost: false,
+            calls: day.calls,
+            sessions: day.sessions.size,
+            models: [...day.models.values()]
+              .filter(m => m.modelName !== 'synthetic' && m.modelName !== '<synthetic>')
+              .map(m => ({
+                modelName: m.modelName,
+                provider: m.provider,
+                inputTokens: m.inputTokens,
+                outputTokens: m.outputTokens,
+                cacheReadTokens: m.cacheReadTokens,
+                cacheWriteTokens: m.cacheWriteTokens,
+                reasoningTokens: m.reasoningTokens,
+                totalTokens: m.totalTokens,
+                totalCost: m.totalCost,
+                estimatedCost: false,
+                calls: m.calls,
+              })),
+            providers: [...day.providers.values()].map(p => ({
+              provider: p.provider,
         displayName: p.displayName,
         inputTokens: p.inputTokens,
         outputTokens: p.outputTokens,
         totalTokens: p.totalTokens,
         totalCost:p.totalCost,
+        estimatedCost: false,
         calls: p.calls,
         sessions: p.sessions.size,
         projects: p.projects.size,
@@ -196,6 +227,8 @@ function projectsToSummary(projects: ProjectSummary[]) {
   const totals = {
     inputTokens: 0,
     outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
     reasoningTokens: 0,
     totalTokens: 0,
     totalCost: 0,
@@ -217,6 +250,8 @@ function projectsToSummary(projects: ProjectSummary[]) {
 for (const call of turn.assistantCalls) {
           totals.inputTokens += call.usage.inputTokens;
           totals.outputTokens += call.usage.outputTokens;
+          totals.cacheReadTokens += call.usage.cacheReadInputTokens;
+          totals.cacheWriteTokens += call.usage.cacheCreationInputTokens;
           totals.totalTokens += call.usage.inputTokens + call.usage.outputTokens;
           totals.totalCost += call.costUSD;
           totals.calls += 1;
@@ -228,6 +263,7 @@ inputTokens: 0,
             outputTokens: 0,
             totalTokens: 0,
             totalCost: 0,
+            estimatedCost: false,
             calls: 0,
             sessions: 0,
             projects: 0,
@@ -245,13 +281,18 @@ const modelKey = `${call.model}-${call.provider}`;
             provider: call.provider,
             inputTokens: 0,
             outputTokens: 0,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
             reasoningTokens: 0,
             totalTokens: 0,
             totalCost: 0,
+            estimatedCost: false,
             calls: 0,
           };
           existingModel.inputTokens += call.usage.inputTokens;
           existingModel.outputTokens+= call.usage.outputTokens;
+          existingModel.cacheReadTokens += call.usage.cacheReadInputTokens;
+          existingModel.cacheWriteTokens += call.usage.cacheCreationInputTokens;
           existingModel.totalTokens += call.usage.inputTokens + call.usage.outputTokens;
           existingModel.totalCost+= call.costUSD;
           existingModel.calls += 1;
@@ -267,6 +308,7 @@ inputTokens: 0,
         outputTokens: 0,
         totalTokens: 0,
         totalCost: 0,
+        estimatedCost: false,
         calls: 0,
         sessions: 0,
       };
@@ -321,6 +363,7 @@ inputTokens: 0,
   return {
     totals: {
       ...totals,
+      estimatedCost: false,
       sessions: totals.sessions.size,
       activeDays: totals.activeDays.size,
     },
@@ -356,17 +399,33 @@ export async function getDaily(query: UsageQuery): Promise<DailyUsageDTO[]> {
   }
 
   const dk = diskCacheKey(query, 'daily');
-  const diskCached = await readJsonCache<DailyUsageDTO[]>(dk, 2);
+  const diskCached = await readJsonCache<DailyUsageDTO[]>(dk, DAILY_DTO_CACHE_VERSION);
   if (diskCached) {
-    memoryCache.set(key, JSON.stringify(diskCached));
-    return diskCached;
+    const normalized = diskCached.map(day => ({
+      ...day,
+      cacheReadTokens: day.cacheReadTokens ?? 0,
+      cacheWriteTokens: day.cacheWriteTokens ?? 0,
+      estimatedCost: day.estimatedCost ?? false,
+      models: (day.models ?? []).map(model => ({
+        ...model,
+        cacheReadTokens: model.cacheReadTokens ?? 0,
+        cacheWriteTokens: model.cacheWriteTokens ?? 0,
+        estimatedCost: model.estimatedCost ?? false,
+      })),
+      providers: (day.providers ?? []).map(provider => ({
+        ...provider,
+        estimatedCost: provider.estimatedCost ?? false,
+      })),
+    }));
+    memoryCache.set(key, JSON.stringify(normalized));
+    return normalized;
   }
 
   const projects = await loadProjects(query);
   const result = projectsToDailyDTO(projects);
 
   memoryCache.set(key, JSON.stringify(result));
-  await writeJsonCache(dk, 2, result);
+  await writeJsonCache(dk, DAILY_DTO_CACHE_VERSION, result);
   return result;
 }
 

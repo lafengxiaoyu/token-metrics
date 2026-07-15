@@ -67,26 +67,87 @@ type LegacyToolRequest = {
   type?: string
 }
 
+type LegacyModelTokenDetails = {
+  input?: { tokenCount?: number }
+  output?: { tokenCount?: number }
+  cache_read?: { tokenCount?: number }
+  cache_write?: { tokenCount?: number }
+}
+
+type LegacyModelMetric = {
+  usage?: {
+    inputTokens?: number
+    outputTokens?: number
+    cacheReadTokens?: number
+    cacheWriteTokens?: number
+    reasoningTokens?: number
+  }
+  tokenDetails?: LegacyModelTokenDetails
+}
+
 type LegacyCopilotEvent =
   | { type: 'session.model_change'; timestamp?: string; data: { newModel: string } }
   | { type: 'user.message'; timestamp?: string; data: { content: string; interactionId?: string } }
   | { type: 'assistant.message'; timestamp?: string; data: { messageId: string; outputTokens: number; interactionId?: string; toolRequests?: LegacyToolRequest[] } }
+  | { type: 'session.shutdown'; timestamp?: string; data: { modelMetrics?: Record<string, LegacyModelMetric> } }
   | { type: string; timestamp?: string; data: Record<string, unknown> }
+
+type LegacyUsageTotals = {
+  inputTokens: number
+  outputTokens: number
+  reasoningTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value !== 'number') return null
+  if (!Number.isFinite(value)) return null
+  return value
+}
+
+function readTokenCount(value: unknown): number | null {
+  if (!value || typeof value !== 'object') return null
+  return asNumber((value as { tokenCount?: unknown }).tokenCount)
+}
+
+function parseShutdownUsage(metric: LegacyModelMetric): LegacyUsageTotals | null {
+  const usage = metric.usage ?? {}
+  const details = metric.tokenDetails ?? {}
+  const cacheRead = readTokenCount(details.cache_read) ?? asNumber(usage.cacheReadTokens) ?? 0
+  const cacheWrite = readTokenCount(details.cache_write) ?? asNumber(usage.cacheWriteTokens) ?? 0
+  const input = readTokenCount(details.input)
+    ?? Math.max(0, (asNumber(usage.inputTokens) ?? 0) - cacheRead)
+  const output = readTokenCount(details.output) ?? asNumber(usage.outputTokens) ?? 0
+  const reasoning = asNumber(usage.reasoningTokens) ?? 0
+  if (input === 0 && output === 0 && reasoning === 0 && cacheRead === 0 && cacheWrite === 0) return null
+  return {
+    inputTokens: input,
+    outputTokens: output,
+    reasoningTokens: reasoning,
+    cacheReadTokens: cacheRead,
+    cacheWriteTokens: cacheWrite,
+  }
+}
 
 function parseLegacyEvents(content: string, sessionId: string, seenKeys: Set<string>): ParsedProviderCall[] {
   const results: ParsedProviderCall[] = []
   const lines = content.split('\n').filter(l => l.trim())
-  let currentModel = ''
-  let pendingUserMessage = ''
-
+  const events: LegacyCopilotEvent[] = []
   for (const line of lines) {
-    let event: LegacyCopilotEvent
     try {
-      event = JSON.parse(line)
+      events.push(JSON.parse(line) as LegacyCopilotEvent)
     } catch {
       continue
     }
+  }
 
+  let currentModel = ''
+  let pendingUserMessage = ''
+  const usageByModel = new Map<string, LegacyUsageTotals>()
+  const shutdownSnapshots: Array<{ timestamp: string; model: string; usage: LegacyUsageTotals }> = []
+
+  for (const event of events) {
     // Some newer events include the model ID explicitly.
     const data = event.data as { newModel?: string; model?: string }
     if (typeof data.model === 'string' && data.model) {
@@ -126,7 +187,11 @@ function parseLegacyEvents(content: string, sessionId: string, seenKeys: Set<str
         model: currentModel,
         inputTokens: 0,
         outputTokens,
+        cacheCreationInputTokens: 0,
+        cacheReadInputTokens: 0,
+        cachedInputTokens: 0,
         reasoningTokens: 0,
+        webSearchRequests: 0,
         costUSD,
         tools,
         bashCommands: [],
@@ -137,8 +202,82 @@ function parseLegacyEvents(content: string, sessionId: string, seenKeys: Set<str
         sessionId,
       })
 
+      const existing = usageByModel.get(currentModel) ?? {
+        inputTokens: 0,
+        outputTokens: 0,
+        reasoningTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+      }
+      existing.outputTokens += outputTokens
+      usageByModel.set(currentModel, existing)
       pendingUserMessage = ''
+      continue
     }
+
+    if (event.type === 'session.shutdown') {
+      const metrics = event.data?.modelMetrics
+      if (!metrics || typeof metrics !== 'object') continue
+      for (const [model, rawMetric] of Object.entries(metrics)) {
+        if (!model || !rawMetric || typeof rawMetric !== 'object') continue
+        const parsed = parseShutdownUsage(rawMetric as LegacyModelMetric)
+        if (!parsed) continue
+        shutdownSnapshots.push({
+          timestamp: event.timestamp ?? '',
+          model,
+          usage: parsed,
+        })
+      }
+    }
+  }
+
+  for (const snapshot of shutdownSnapshots) {
+    const reconciled = usageByModel.get(snapshot.model) ?? {
+      inputTokens: 0,
+      outputTokens: 0,
+      reasoningTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    }
+    const inputTokens = Math.max(0, snapshot.usage.inputTokens - reconciled.inputTokens)
+    const outputTokens = Math.max(0, snapshot.usage.outputTokens - reconciled.outputTokens)
+    const reasoningTokens = Math.max(0, snapshot.usage.reasoningTokens - reconciled.reasoningTokens)
+    const cacheReadTokens = Math.max(0, snapshot.usage.cacheReadTokens - reconciled.cacheReadTokens)
+    const cacheWriteTokens = Math.max(0, snapshot.usage.cacheWriteTokens - reconciled.cacheWriteTokens)
+    if (inputTokens === 0 && outputTokens === 0 && reasoningTokens === 0 && cacheReadTokens === 0 && cacheWriteTokens === 0) {
+      continue
+    }
+
+    const dedupKey = `copilot:${sessionId}:shutdown:${snapshot.timestamp}:${snapshot.model}`
+    if (seenKeys.has(dedupKey)) continue
+    seenKeys.add(dedupKey)
+
+    results.push({
+      provider: 'copilot',
+      model: snapshot.model,
+      inputTokens,
+      outputTokens,
+      cacheCreationInputTokens: cacheWriteTokens,
+      cacheReadInputTokens: cacheReadTokens,
+      cachedInputTokens: cacheReadTokens,
+      reasoningTokens,
+      webSearchRequests: 0,
+      costUSD: calculateCost(
+        snapshot.model,
+        inputTokens,
+        outputTokens + reasoningTokens,
+        cacheWriteTokens,
+        cacheReadTokens,
+        0,
+      ),
+      tools: [],
+      bashCommands: [],
+      timestamp: snapshot.timestamp,
+      speed: 'standard',
+      deduplicationKey: dedupKey,
+      userMessage: '',
+      sessionId,
+    })
   }
 
   return results
@@ -213,6 +352,8 @@ function parseTranscriptEvents(content: string, sessionId: string, seenKeys: Set
 
   const model = inferModelFromToolCallIds(events)
   let pendingUserMessage = ''
+  const usageByModel = new Map<string, LegacyUsageTotals>()
+  const shutdownSnapshots: Array<{ timestamp: string; model: string; usage: LegacyUsageTotals }> = []
 
   for (const event of events) {
     if (event.type === 'user.message') {
@@ -253,7 +394,11 @@ function parseTranscriptEvents(content: string, sessionId: string, seenKeys: Set
         model,
         inputTokens,
         outputTokens,
+        cacheCreationInputTokens: 0,
+        cacheReadInputTokens: 0,
+        cachedInputTokens: 0,
         reasoningTokens,
+        webSearchRequests: 0,
         costUSD,
         tools,
         bashCommands: [],
@@ -264,8 +409,84 @@ function parseTranscriptEvents(content: string, sessionId: string, seenKeys: Set
         sessionId,
       })
 
+      const existing = usageByModel.get(model) ?? {
+        inputTokens: 0,
+        outputTokens: 0,
+        reasoningTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+      }
+      existing.inputTokens += inputTokens
+      existing.outputTokens += outputTokens
+      existing.reasoningTokens += reasoningTokens
+      usageByModel.set(model, existing)
       pendingUserMessage = ''
+      continue
     }
+
+    if (event.type === 'session.shutdown') {
+      const metrics = (event.data as { modelMetrics?: Record<string, LegacyModelMetric> })?.modelMetrics
+      if (!metrics || typeof metrics !== 'object') continue
+      for (const [modelName, rawMetric] of Object.entries(metrics)) {
+        if (!modelName || !rawMetric || typeof rawMetric !== 'object') continue
+        const parsed = parseShutdownUsage(rawMetric as LegacyModelMetric)
+        if (!parsed) continue
+        shutdownSnapshots.push({
+          timestamp: event.timestamp ?? '',
+          model: modelName,
+          usage: parsed,
+        })
+      }
+    }
+  }
+
+  for (const snapshot of shutdownSnapshots) {
+    const reconciled = usageByModel.get(snapshot.model) ?? {
+      inputTokens: 0,
+      outputTokens: 0,
+      reasoningTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    }
+    const inputTokens = Math.max(0, snapshot.usage.inputTokens - reconciled.inputTokens)
+    const outputTokens = Math.max(0, snapshot.usage.outputTokens - reconciled.outputTokens)
+    const reasoningTokens = Math.max(0, snapshot.usage.reasoningTokens - reconciled.reasoningTokens)
+    const cacheReadTokens = Math.max(0, snapshot.usage.cacheReadTokens - reconciled.cacheReadTokens)
+    const cacheWriteTokens = Math.max(0, snapshot.usage.cacheWriteTokens - reconciled.cacheWriteTokens)
+    if (inputTokens === 0 && outputTokens === 0 && reasoningTokens === 0 && cacheReadTokens === 0 && cacheWriteTokens === 0) {
+      continue
+    }
+
+    const dedupKey = `copilot:${sessionId}:shutdown:${snapshot.timestamp}:${snapshot.model}`
+    if (seenKeys.has(dedupKey)) continue
+    seenKeys.add(dedupKey)
+
+    results.push({
+      provider: 'copilot',
+      model: snapshot.model,
+      inputTokens,
+      outputTokens,
+      cacheCreationInputTokens: cacheWriteTokens,
+      cacheReadInputTokens: cacheReadTokens,
+      cachedInputTokens: cacheReadTokens,
+      reasoningTokens,
+      webSearchRequests: 0,
+      costUSD: calculateCost(
+        snapshot.model,
+        inputTokens,
+        outputTokens + reasoningTokens,
+        cacheWriteTokens,
+        cacheReadTokens,
+        0,
+      ),
+      tools: [],
+      bashCommands: [],
+      timestamp: snapshot.timestamp,
+      speed: 'standard',
+      deduplicationKey: dedupKey,
+      userMessage: '',
+      sessionId,
+    })
   }
 
   return results

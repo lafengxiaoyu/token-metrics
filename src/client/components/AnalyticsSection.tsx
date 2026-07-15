@@ -1,11 +1,34 @@
 import { useMemo } from 'react';
 import {
   AreaChart, Area,LineChart, Line,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import type { AnalyticsResponse } from '../../shared/types.js';
 
 const C = ['#4f46e5', '#10b981', '#f59e0b', '#ec4899', '#0ea5e9', '#8b5cf6', '#ef4444', '#14b8a6'];
+
+function getToolDescription(toolName: string): string {
+  const key = toolName.trim().toLowerCase();
+  const descriptions: Record<string, string> = {
+    view: 'Reads file or directory content.',
+    read: 'Reads file or directory content (legacy alias).',
+    rg: 'Searches text in files using ripgrep.',
+    grep: 'Searches text in files using grep-style matching.',
+    glob: 'Finds files by path/name pattern.',
+    bash: 'Runs shell commands.',
+    read_bash: 'Reads output from a running shell command.',
+    stop_bash: 'Stops a running shell command session.',
+    apply_patch: 'Edits files using patch hunks.',
+    edit: 'Edits file content directly.',
+    web_fetch: 'Fetches and parses web page content.',
+    ask_user: 'Requests clarification/input from the user.',
+    task: 'Runs a delegated sub-agent task.',
+    skill: 'Invokes an installed skill.',
+    fetch_copilot_cli_documentation: 'Loads official Copilot CLI documentation.',
+    report_intent: 'System intent-tracking event (not a direct engineering action).',
+  };
+  return descriptions[key] ?? 'Tool invocation captured from session logs.';
+}
 
 // --- Shared UI primitives (matching Dashboard style) ---
 
@@ -129,11 +152,27 @@ export function AnalyticsSection({ analytics, timeRange }: AnalyticsSectionProps
                 {topTools.map((tool, i) => (
                   <Line key={tool} type="monotone" dataKey={tool} stroke={C[i % C.length]} strokeWidth={2} dot={false} />
                 ))}
-                <Legend iconType="line" wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           ) : (
             <p className="text-stone-400 text-[13px] py-8 text-center">No tool call trend data available</p>
+          )}
+          {topTools.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-2.5 text-[11px]">
+              {topTools.map((tool, i) => (
+                <span key={tool} className="inline-flex items-center gap-1.5 rounded-md border border-stone-200 bg-stone-50 px-2 py-1 text-stone-700">
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: C[i % C.length] }} />
+                  <span>{tool}</span>
+                  <span
+                    title={getToolDescription(tool)}
+                    aria-label={`${tool} description`}
+                    className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-stone-300 text-[10px] font-bold text-stone-500 cursor-help"
+                  >
+                    ?
+                  </span>
+                </span>
+              ))}
+            </div>
           )}
         </Panel>
       </div>

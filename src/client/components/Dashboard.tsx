@@ -18,7 +18,7 @@ import { InsightsSection } from './InsightsSection.js';
 import { AdditionalInsightsSection } from './AdditionalInsightsSection.js';
 import { EfficiencyCoachSection } from './EfficiencyCoachSection.js';
 import { useAdvancedInsights } from '../hooks/useAdvancedInsights.js';
-import type { DailyEntry, MetricMode } from '../../shared/types.js';
+import type { DailyEntry } from '../../shared/types.js';
 
 const C = ['#4f46e5', '#10b981', '#f59e0b', '#ec4899', '#0ea5e9', '#8b5cf6', '#ef4444', '#14b8a6'];
 
@@ -146,7 +146,6 @@ export function Dashboard() {
   const [timeRange, setTimeRange] = useLocalStorageState<LocalTimeRangeKey>('dashboard_timeRange', '30d');
   const [project, setProject] = useLocalStorageState('dashboard_project', '');
   const [showPricing, setShowPricing] = useState(false);
-  const [metric, setMetric] = useLocalStorageState<MetricMode>('dashboard_metric', 'tokens');
   const [editingCreditLimit, setEditingCreditLimit] = useState(false);
   const [creditInput, setCreditInput] = useState('3000');
   const [officialUsedInput, setOfficialUsedInput] = useState('');
@@ -223,9 +222,8 @@ export function Dashboard() {
 
   const coreLoading = dailyData.loading && !dailyData.data;
   const coreError = dailyData.error && !dailyData.data;
-  const isTokens = metric === 'tokens';
-  const selectedMetric: MetricMode = isTokens ? 'tokens' : 'credits';
-  const dataKey = isTokens ? 'tokens' : 'credits';
+  const isTokens = false;
+  const dataKey = 'credits';
   const isToday = timeRange === 'today';
 
   const projectList = useMemo(() => {
@@ -246,15 +244,20 @@ export function Dashboard() {
     return filteredDaily.reduce((acc, d) => ({
       inputTokens: acc.inputTokens + d.inputTokens,
       outputTokens: acc.outputTokens + d.outputTokens,
+      cacheReadTokens: acc.cacheReadTokens + d.cacheReadTokens,
+      cacheWriteTokens: acc.cacheWriteTokens + d.cacheWriteTokens,
       totalTokens: acc.totalTokens + d.totalTokens,
       totalCost: acc.totalCost + d.totalCost,
-    }), { inputTokens: 0, outputTokens: 0, totalTokens: 0, totalCost: 0 });
+    }), { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, totalTokens: 0, totalCost: 0 });
   }, [filteredDaily]);
 
   const activeDays = filteredDaily.length;
 
     const outputRatio = totals.inputTokens > 0
     ? (totals.outputTokens / totals.inputTokens) * 100
+    : 0;
+  const cacheHitRatio = (totals.inputTokens + totals.cacheReadTokens) > 0
+    ? (totals.cacheReadTokens / (totals.inputTokens + totals.cacheReadTokens)) * 100
     : 0;
 
   // Model aggregation from daily data
@@ -368,11 +371,6 @@ export function Dashboard() {
               </>
             )}
 
-            <div className="w-px h-10 bg-stone-200/60 hidden sm:block"></div>
-            <div className="flex flex-col gap-2">
-              <span className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider">Metric</span>
-              <FilterTab options={[{ key: 'tokens', label: 'Tokens' }, { key: 'credits', label: 'AI Credits' }]} value={selectedMetric} onChange={v => setMetric(v as MetricMode)} />
-            </div>
           </div>
         </div>
       </div>
@@ -474,10 +472,12 @@ export function Dashboard() {
               <div className="text-stone-500 mb-0.5">{(quotaData.data.usageSource === 'official-manual' || quotaData.data.usageSource === 'official-api') ? 'Official usage' : 'Local trace estimate (incomplete)'}</div>
               <div className="text-stone-900 font-semibold">{formatCredits(quotaData.data.spentCredits)} credits</div>
             </div>
-            <div>
-              <div className="text-stone-500 mb-0.5">Local trace estimate (incomplete)</div>
-              <div className="text-stone-900 font-semibold">{formatCredits(quotaData.data.localEstimatedCredits)} credits</div>
-            </div>
+            {(quotaData.data.usageSource === 'official-manual' || quotaData.data.usageSource === 'official-api') && (
+              <div>
+                <div className="text-stone-500 mb-0.5">Local trace estimate (incomplete)</div>
+                <div className="text-stone-900 font-semibold">{formatCredits(quotaData.data.localEstimatedCredits)} credits</div>
+              </div>
+            )}
             <div>
               <div className="text-stone-500 mb-0.5">Estimated API value</div>
               <div className="text-stone-900 font-semibold">{formatUSD(quotaData.data.spentApiEquivalentUsd)}</div>
@@ -513,6 +513,12 @@ export function Dashboard() {
             insight={`${insightsData.data.weeklyTrend >= 0 ? '📈 Up' : '📉 Down'} - This week ${formatUSD(insightsData.data.lastWeekCost)} vs last week ${formatUSD(insightsData.data.prevWeekCost)}`}
           />
         ) : null}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <KPICard label="Cache read" value={formatTokens(totals.cacheReadTokens)} sub="discount-priced context" insight="Tokens served from prompt cache." />
+        <KPICard label="Cache write" value={formatTokens(totals.cacheWriteTokens)} sub="cache creation" insight="Tokens spent to build prompt cache." />
+        <KPICard label="Cache hit rate" value={formatPercent(cacheHitRatio)} sub="cache_read / (input + cache_read)" insight="Higher hit rate usually lowers input-side cost." />
       </div>
 
       {/* Insights Row */}
@@ -589,7 +595,7 @@ export function Dashboard() {
       )}
 
       {/* Model Trend (bar) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+      <div className="mb-4">
         <Panel title="Model trend" subtitle="Showing top 6 models by volume">
           <ResponsiveContainer width="100%" height={260}>
             {modelAgg.length > 0 ? (
@@ -719,9 +725,11 @@ export function Dashboard() {
                 <th className="text-left py-3 px-4 text-stone-400 font-semibold text-[10px]">Date</th>
                 <th className="text-right py-3 px-4 text-stone-400 font-semibold text-[10px]">Input</th>
                 <th className="text-right py-3 px-4 text-stone-400 font-semibold text-[10px]">Output</th>
+                                <th className="text-right py-3 px-4 text-stone-400 font-semibold text-[10px]">Cache read</th>
+                                <th className="text-right py-3 px-4 text-stone-400 font-semibold text-[10px]">Cache write</th>
                                 <th className="text-right py-3 px-4 text-stone-600 font-semibold text-[10px]">Total tokens</th>
-                <th className="text-right py-3 px-4 text-stone-400 font-semibold text-[10px]">AI credits</th>
-                <th className="text-left py-3 px-4 text-stone-400 font-semibold text-[10px]">Models</th>
+                                <th className="text-right py-3 px-4 text-stone-400 font-semibold text-[10px]">AI credits</th>
+                                <th className="text-left py-3 px-4 text-stone-400 font-semibold text-[10px]">Models</th>
               </tr>
             </thead>
             <tbody>
@@ -730,7 +738,9 @@ export function Dashboard() {
                   <td className="py-2.5 px-4 text-stone-800 font-semibold">{formatDate(d.date)}</td>
                   <td className="py-2.5 px-4 text-right font-mono text-stone-500">{formatTokens(d.inputTokens)}</td>
                   <td className="py-2.5 px-4 text-right font-mono text-stone-500">{formatTokens(d.outputTokens)}</td>
-                                    <td className="py-2.5 px-4 text-right font-mono font-semibold text-indigo-600">{formatTokens(d.totalTokens)}</td>
+                  <td className="py-2.5 px-4 text-right font-mono text-stone-500">{formatTokens(d.cacheReadTokens)}</td>
+                  <td className="py-2.5 px-4 text-right font-mono text-stone-500">{formatTokens(d.cacheWriteTokens)}</td>
+                  <td className="py-2.5 px-4 text-right font-mono font-semibold text-indigo-600">{formatTokens(d.totalTokens)}</td>
                   <td className="py-2.5 px-4 text-right font-mono font-medium text-stone-600 bg-stone-50/40">{formatCredits(d.totalCost * 100)}</td>
                   <td className="py-2.5 px-4text-stone-500 font-medium truncate max-w-[200px]">{d.modelsUsed.filter(m => !isSyntheticModel(m)).map(shortModelName).join(', ') || '-'}</td>
                 </tr>

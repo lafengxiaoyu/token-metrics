@@ -25,25 +25,58 @@ type SnapshotEntry = [number, number, number | null, number | null]
 const LITELLM_URL = 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json'
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000
 const WEB_SEARCH_COST = 0.01
+const ZERO_CACHE_WRITE_MODELS = new Set([
+  'gpt-5.3-codex',
+])
 
 const FAST_MULTIPLIERS: Record<string, number> = {
   'claude-opus-4-7': 6,
   'claude-opus-4-6': 6,
+  'claude-opus-4-8': 2, // fast mode is 10/1/12.5/50, standard is 5/0.5/6.25/25
+}
+
+// Manual overrides for models missing or incorrect in snapshot
+// Prices in USD per token (divide by 1M for per-token cost)
+const MANUAL_OVERRIDES: Record<string, ModelCosts> = {
+  'claude-opus-4-8': {
+    inputCostPerToken: 5.00 / 1_000_000,
+    outputCostPerToken: 25.00 / 1_000_000,
+    cacheWriteCostPerToken: 6.25 / 1_000_000,
+    cacheReadCostPerToken: 0.50 / 1_000_000,
+    webSearchCostPerRequest: WEB_SEARCH_COST,
+    fastMultiplier: 2,
+  },
+  'claude-sonnet-51': {
+    inputCostPerToken: 2.00 / 1_000_000,
+    outputCostPerToken: 10.00 / 1_000_000,
+    cacheWriteCostPerToken: 2.50 / 1_000_000,
+    cacheReadCostPerToken: 0.20 / 1_000_000,
+    webSearchCostPerRequest: WEB_SEARCH_COST,
+    fastMultiplier: 1,
+  },
 }
 
 function loadSnapshot(): Map<string, ModelCosts> {
   const map = new Map<string, ModelCosts>()
   for (const [name, raw] of Object.entries(snapshotData as unknown as Record<string, SnapshotEntry>)) {
     const [input, output, cacheWrite, cacheRead] = raw
+    const stripped = name.replace(/^[^/]+\//, '')
+    const forceZeroCacheWrite = ZERO_CACHE_WRITE_MODELS.has(name) || ZERO_CACHE_WRITE_MODELS.has(stripped)
     map.set(name, {
       inputCostPerToken: input,
       outputCostPerToken: output,
-      cacheWriteCostPerToken: cacheWrite ?? input * 1.25,
+      cacheWriteCostPerToken: forceZeroCacheWrite ? 0 : (cacheWrite ?? input * 1.25),
       cacheReadCostPerToken: cacheRead ?? input * 0.1,
       webSearchCostPerRequest: WEB_SEARCH_COST,
       fastMultiplier: FAST_MULTIPLIERS[name] ?? 1,
     })
   }
+  
+  // Apply manual overrides for missing/incorrect models
+  for (const [name, costs] of Object.entries(MANUAL_OVERRIDES)) {
+    map.set(name, costs)
+  }
+  
   return map
 }
 
@@ -65,12 +98,16 @@ function getCachePath(): string {
   return join(getCacheDir(), 'litellm-pricing.json')
 }
 
-function parseLiteLLMEntry(entry: LiteLLMEntry): ModelCosts | null {
+function parseLiteLLMEntry(modelName: string, entry: LiteLLMEntry): ModelCosts | null {
   if (entry.input_cost_per_token === undefined || entry.output_cost_per_token === undefined) return null
+  const stripped = modelName.replace(/^[^/]+\//, '')
+  const forceZeroCacheWrite = ZERO_CACHE_WRITE_MODELS.has(modelName) || ZERO_CACHE_WRITE_MODELS.has(stripped)
   return {
     inputCostPerToken: entry.input_cost_per_token,
     outputCostPerToken: entry.output_cost_per_token,
-    cacheWriteCostPerToken: entry.cache_creation_input_token_cost ?? entry.input_cost_per_token * 1.25,
+    cacheWriteCostPerToken: forceZeroCacheWrite
+      ? 0
+      : (entry.cache_creation_input_token_cost ?? entry.input_cost_per_token * 1.25),
     cacheReadCostPerToken: entry.cache_read_input_token_cost ?? entry.input_cost_per_token * 0.1,
     webSearchCostPerRequest: WEB_SEARCH_COST,
     fastMultiplier: entry.provider_specific_entry?.fast ?? 1,
@@ -84,7 +121,7 @@ async function fetchAndCachePricing(): Promise<Map<string, ModelCosts>> {
   const pricing = new Map<string, ModelCosts>()
 
   for (const [name, entry] of Object.entries(data)) {
-    const costs = parseLiteLLMEntry(entry)
+    const costs = parseLiteLLMEntry(name, entry)
     if (!costs) continue
     pricing.set(name, costs)
     // Also index by stripped name so lookups work without provider prefix:
@@ -278,11 +315,13 @@ const autoModelNames: Record<string, string> = {
 }
 
 const SHORT_NAMES: Record<string, string> = {
+  'claude-opus-4-8': 'Opus 4.8',
   'claude-opus-4-7': 'Opus 4.7',
   'claude-opus-4-6': 'Opus 4.6',
   'claude-opus-4-5': 'Opus 4.5',
   'claude-opus-4-1': 'Opus 4.1',
   'claude-opus-4': 'Opus 4',
+  'claude-sonnet-51': 'Sonnet 5.1',
   'claude-sonnet-4-6': 'Sonnet 4.6',
   'claude-sonnet-4-5': 'Sonnet 4.5',
   'claude-sonnet-4': 'Sonnet 4',

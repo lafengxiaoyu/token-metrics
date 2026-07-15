@@ -1,11 +1,12 @@
 export function formatTokens(n: number): string {
-  if (n >= 1_000_000) {
-    return (n / 1_000_000).toFixed(1) + 'M';
+  const value = Number.isFinite(n) ? n : 0;
+  if (value >= 1_000_000) {
+    return (value / 1_000_000).toFixed(1) + 'M';
   }
-  if (n >= 1_000) {
-    return (n / 1_000).toFixed(0) + 'K';
+  if (value >= 1_000) {
+    return (value / 1_000).toFixed(0) + 'K';
   }
-  return n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  return value.toLocaleString('en-US', { maximumFractionDigits: 0 });
 }
 
 export function formatUSD(n: number): string {

@@ -154,7 +154,7 @@ describe('Copilot AI credit usage', () => {
     expect(usage.usageSource).toBe('official-manual')
   })
 
-  it('applies calibrated local estimate factor when no official usage is available', () => {
+  it('uses raw local estimate when no calibration factor is configured', () => {
     delete process.env.TOKENLENS_LOCAL_TO_OFFICIAL_FACTOR
     const usage = getPlanUsageFromProjects(
       DEFAULT_COPILOT_CREDIT_PLAN,
@@ -163,7 +163,7 @@ describe('Copilot AI credit usage', () => {
     )
 
     expect(usage.localEstimatedCredits).toBeCloseTo(854, 6)
-    expect(usage.spentCredits).toBeCloseTo(3077, 0)
-    expect(usage.usageSource).toBe('local-estimate-calibrated')
+    expect(usage.spentCredits).toBeCloseTo(854, 6)
+    expect(usage.usageSource).toBe('local-estimate')
   })
 })

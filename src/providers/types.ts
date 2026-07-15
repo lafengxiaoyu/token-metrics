@@ -13,7 +13,11 @@ export type ParsedProviderCall = {
   model: string
   inputTokens: number
   outputTokens: number
+  cacheCreationInputTokens?: number
+  cacheReadInputTokens?: number
+  cachedInputTokens?: number
   reasoningTokens: number
+  webSearchRequests?: number
   costUSD: number
   tools: string[]
   bashCommands: string[]
@@ -22,6 +26,8 @@ export type ParsedProviderCall = {
   deduplicationKey: string
   userMessage: string
   sessionId: string
+  linesAdded?: number
+  linesDeleted?: number
 }
 
 export type Provider = {

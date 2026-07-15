@@ -2,6 +2,8 @@ export interface ModelBreakdown {
   modelName: string;
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
   cost: number;
 }
 
@@ -9,6 +11,8 @@ export interface DailyEntry {
   date: string;
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   totalTokens: number;
   totalCost: number;
   modelsUsed: string[];
@@ -18,6 +22,8 @@ export interface DailyEntry {
 export interface Totals {
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   totalTokens: number;
   totalCost: number;
 }
@@ -112,9 +118,12 @@ export interface ProviderStatusDTO {
 export interface TokenTotalsDTO {
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   reasoningTokens: number;
   totalTokens: number;
   totalCost: number;
+  estimatedCost: boolean;
   calls: number;
   sessions: number;
   activeDays: number;
@@ -125,9 +134,12 @@ export interface ModelUsageDTO {
   provider: string;
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   reasoningTokens: number;
   totalTokens: number;
   totalCost: number;
+  estimatedCost: boolean;
   calls: number;
 }
 
@@ -138,6 +150,7 @@ export interface ProviderUsageDTO {
   outputTokens: number;
   totalTokens: number;
   totalCost: number;
+  estimatedCost: boolean;
   calls: number;
   sessions: number;
   projects: number;
@@ -147,9 +160,12 @@ export interface DailyUsageDTO {
   date: string;
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   reasoningTokens: number;
   totalTokens: number;
   totalCost: number;
+  estimatedCost: boolean;
   calls: number;
   sessions: number;
   providers: ProviderUsageDTO[];
@@ -164,6 +180,7 @@ export interface ProjectUsageDTO {
   outputTokens: number;
   totalTokens: number;
   totalCost: number;
+  estimatedCost: boolean;
   calls: number;
   sessions: number;
 }
